@@ -75,7 +75,7 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 
 int32 InitConnectionInfo()
 {
-    memset(&g_TVS_IO_AppData.serv_addr, '0', sizeof(struct sockaddr_in));
+    memset(&g_TVS_IO_AppData.serv_addr, '\0', sizeof(struct sockaddr_in));
 
     g_TVS_IO_AppData.serv_addr.sin_family = AF_INET;
     g_TVS_IO_AppData.serv_addr.sin_port = htons(TVS_SERVER_PORT);

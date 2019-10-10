@@ -1,0 +1,73 @@
+##############################################################
+######################### Overview ###########################
+##############################################################
+
+TVS_IO supports mapping between complex (composite) data type instances in CFS to members of an arbitrary number of instances of Trick simulation data types.  This mapping is captured in a "TVM" file (short for "Trick Variable-Mapping" file).
+
+##############################################################
+########################### TVMC #############################
+##############################################################
+
+A TVM file specifies a mapping between a CFS Data Type instance's members and Trick simulation variables.  
+
+The TVM Compiler (TVMC) consumes these TVM files and generates code which marshals and unmarshals data for transport between CFS and Trick.  This is analagous to a serialization library, but a significant difference is that there is potentially a one-to-many relationship between types in the calling applications. Moreover, "data" flowing from CFS to Trick is actually python code that is generated "on-the-fly" from c-code at runtime.
+
+Fun to think about how we have a python code generator that produces c-code which is compiled into an application which in turn spits out more python code at run-time :D  I'm half-tempted to refer to this process as the "circle-of-life" if not for the fact that a certain major animation studio may come after me :P
+
+##############################################################
+################# TVM File Specification #####################
+##############################################################
+
+The TVM file contents are essentially a JSON object with some required/optional key-value pairs.  The following is a description of the keys and their expected values:
+
+Key: "cfsStructureType"
+Value: String type containing the CFS Data Structure Name whose fields will be mapped to Trick simulation variables
+
+Key: "cfsStructureFileName"
+Value: String type containing the C-header file name which contains the CFS Data Type specified by the "cfsStructureType" key (described above)
+
+Key: "members"
+Value: A JSON array containing a set of json objects - one JSON object per primitive type mapping.  The schema describing a primitive type mapping for each JSON object in this array will be discussed in a later section called "Members Array JSON Object Schema".
+
+Key: "messageId"
+Value: The message ID associated with particular "instance" of a CFS data type
+
+Key: "flowDirection"
+Value: An integer type that can be 1, 2, or 3.  If this is set to 1, this mapping only applies to data flowing from Trick to CFS.  If this is set to 2, this mapping only applies to data flowing from CFS to Trick.  If this is set to 3, then this mapping is "bi-directional" and applies to data flowing in either direction betweeen CFS and Trick.
+
+Key: "commandCode" (optional and only used for mappings with a CCSDS Telecommand Message ID)
+Value: If supplied, the command code will be coupled with a particular message ID to uniquely identify a particular mapping.
+
+##############################################################
+############## Members Array JSON Object Schema ##############
+##############################################################
+
+For each mapping of a CFS data structure's primitive type member to a Trick simulation variable, the following key-value pairs must be defined:
+
+Key: "trickVar"
+Value: String type containing the full name of the Trick Variable (hint: if you're not sure how the trick variable name looks for arrays or other types, the 'Trick View' GUI client to the variable server is a really handy utility)
+
+Key: "trickType"
+Value: String type containing one of the following values - "float", "double", "int", "uint" and "char[x]" where 'x' is an integer value describing the maximum length of a string (including null-terminator).  Note that "char[x]" should be use when the trick type is a string.  Also note that "int" and "uint" stand for signed & unsigned integer types respectively and are sufficient for describing for any size integer values (including bit-fields).  The only necessary distinction between integer types in this field are signed vs. unsigned.
+
+Key: "cfsVar"
+Value: String type containing the full name of the CFS data member.
+
+Key: "cfsType"
+Value: String type containing one of the following values - "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float", "double" and "char[x]" where 'x' is an integer value describing the maximum length of a string (including null-terminator).  Note that "char[x]" should be used when the CFS data type is a string or byte-array.
+
+##############################################################
+#### Type Conversions Between CFS & Trick Primitive Types ####
+##############################################################
+
+TVS_IO supports conversions between primitive data types in CFS and Trick.  Moreover, TVMC has an extensible interface for extending supported type conversions to accomodate user-defined mappings between different types.
+
+Currently supported default primitive type mappings from CFS to Trick include, respectively:
+
+Signed/Unsigned Integer type <-> Signed/Unsigned Integer type
+Float <-> Signed/Unsigned Integer Type (and vice versa)
+Double <-> Signed/Unsigned Integer Type (and vice versa)
+Float <-> Double (and vice versa)
+Character/Byte Array <-> String
+
+NOTE: Anywhere that "Signed/Unsigned Integer Type" is mentioned in the above list of mappings, that type may be a bit-field type.  Due to the nature of the Trick binary data format for bit-fields, there is no need for any distinction between bit-fields and multi-byte integer words in the TVM specification.

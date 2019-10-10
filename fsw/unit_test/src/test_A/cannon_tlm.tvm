@@ -1,0 +1,17 @@
+{
+    "cfsStructureType":"Struct_Cannon",
+    "cfsStructureFileName":"CannonStructDef.h",
+    "members": [
+        {"trickVar":"dyn.cannon.rf.delta_time", "trickType":"float", "cfsVar":"rf.delta_time", "cfsType":"double"},
+        {"trickVar":"trick_zero_conf.zc.name", "trickType":"char[512]", "cfsVar":"mystring", "cfsType":"char[512]"},
+        {"trickVar":"dyn.cannon.impact", "trickType":"uint", "cfsVar":"impact", "cfsType":"float"},
+        {"trickVar":"dyn.cannon.rf.lower_set", "trickType":"float", "cfsVar":"rf.lower_set", "cfsType":"int16"},
+        {"trickVar":"dyn.cannon.rf.upper_set", "trickType":"double", "cfsVar":"rf.upper_set", "cfsType":"uint16"},
+        {"trickVar":"dyn.cannon.pos[0]", "trickType":"double", "cfsVar":"pos[0]", "cfsType":"float"},
+        {"trickVar":"dyn.cannon.pos[1]", "trickType":"double", "cfsVar":"pos[1]", "cfsType":"float"},
+        {"trickVar":"dyn.cannon.vel[0]", "trickType":"double", "cfsVar":"vel[0]", "cfsType":"float"},
+        {"trickVar":"dyn.cannon.vel[1]", "trickType":"double", "cfsVar":"vel[1]", "cfsType":"float"}
+    ],
+    "messageId":"0x01BA",
+    "flowDirection":1
+}

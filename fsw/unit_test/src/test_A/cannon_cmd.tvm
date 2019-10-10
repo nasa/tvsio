@@ -1,0 +1,12 @@
+{
+    "cfsStructureType":"Struct_Cannon_SetVelCmd",
+    "cfsStructureFileName":"CannonStructDef.h",
+    "members": [
+        {"trickVar":"dyn.cannon.vel[0]", "trickType":"double", "cfsVar":"vel[0]", "cfsType":"float"},
+        {"trickVar":"dyn.cannon.vel[1]", "trickType":"double", "cfsVar":"vel[1]", "cfsType":"float"},
+        {"trickVar":"trick_zero_conf.zc.name", "trickType":"char[512]", "cfsVar":"mystring", "cfsType":"char[512]"}
+    ],
+    "messageId":"0x19BA",
+    "commandCode":23,
+    "flowDirection":2
+}

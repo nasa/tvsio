@@ -399,6 +399,7 @@ def main():
             tvmJsonString = tvmFile.read()
 
         try:
+            tvmJsonString = fixCase(tvmJsonString, tvmFilePath)
             tvmObject = json.loads(tvmJsonString)
         except ValueError as err:
             print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))

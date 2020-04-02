@@ -376,11 +376,12 @@ def main():
             try:
                 fileNames = os.listdir(basePath)
             except:
-                print("\n\nDir '{0}' does not exist\n".format(filePath))
+                print("\n\n *** TVMC WARNING: Dir '{0}' does not exist. Skipping ***\n".format(basePath))
                 fileNames = []
 
             for fileName in fileNames:
-                tvm_files.append(basePath + fileName)
+                if fileName.endswith(".tvm"):
+                    tvm_files.append(basePath + "/" + fileName)
 
         elif filePath.endswith(".tvm"):
 
@@ -483,6 +484,28 @@ def main():
 
     with open(outputSourceFilePath, "w") as outputSourceFile:
         outputSourceFile.write(generator.GenerateSourceFileData())
+
+def fixCase(JsonStr, tvmFilePath):
+    tvmKeywords = { ("cfsStructureType",    1), # name, max count
+                    ("cfsStructureFileName",1),
+                    ("trickVar",           -1),
+                    ("trickType",          -1),
+                    ("cfsVar",             -1),
+                    ("cfsType",            -1),
+                    ("messageId",           1),
+                    ("members",             1),
+                    ("commandCode",         1),
+                    ("flowDirection",       1)}
+
+    fixedCase = JsonStr
+    for keyword in tvmKeywords:
+        formedKeyword = "\"{0}\":".format(keyword[0])
+        subOut = re.subn(formedKeyword, formedKeyword, fixedCase, flags=re.IGNORECASE)
+        fixedCase = subOut[0]
+        if (keyword[1] != -1 and subOut[1] > keyword[1]):
+            print("\n\nTVMC Error: Expected {1} occurence{2} of parameter \"{0}\". Found {3} in file '{4}'\n\n".format(keyword[0], keyword[1], "" if keyword[1] == 1 else "s", subOut[1], tvmFilePath))
+
+    return fixedCase
 
 if __name__ == "__main__":
     main()

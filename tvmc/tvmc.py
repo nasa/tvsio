@@ -3,6 +3,7 @@ import os
 import argparse
 import json
 import re
+from classes import levenshtein as lev
 
 #################################################################
 ##### Main classes for code-gen & defining a TVS IO Mapping #####
@@ -390,6 +391,8 @@ def main():
     if len(tvm_files) == 0:
         print("\n\n *** TVMC WARNING: No TVM file paths specified *** \n\n")
 
+    cleaner = lev.TvmLevenshtein()
+
     # # process the tvm files
     for tvmFilePath in tvm_files:
 
@@ -399,10 +402,24 @@ def main():
             tvmJsonString = tvmFile.read()
 
         try:
-            tvmJsonString = fixCase(tvmJsonString, tvmFilePath)
+            # *** TODO: ***
+            # # Remove wholesale CamelCase replacement.
+            # # implement code that fixes capitalization as part of Levenshtein
+            tvmJsonString = cleaner.fixCase(tvmJsonString, tvmFilePath)
             tvmObject = json.loads(tvmJsonString)
         except ValueError as err:
             print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
+            continue
+
+        try:
+            # Attempt to fix all top level TVM Parameters
+            cleaner.fixDict(tvmObject)
+
+            # Now, Attempt to fix each mapping's variable parameters
+            for mapping in tvmObject['members']:
+                cleaner.fixDict(mapping, True)
+        except:
+            print("\n\nTMCV Error: Encountered Levenshtein problem in file '{0}'\n".format(tvmFile))
             continue
 
         try:
@@ -485,28 +502,6 @@ def main():
 
     with open(outputSourceFilePath, "w") as outputSourceFile:
         outputSourceFile.write(generator.GenerateSourceFileData())
-
-def fixCase(JsonStr, tvmFilePath):
-    tvmKeywords = { ("cfsStructureType",    1), # name, max count
-                    ("cfsStructureFileName",1),
-                    ("trickVar",           -1),
-                    ("trickType",          -1),
-                    ("cfsVar",             -1),
-                    ("cfsType",            -1),
-                    ("messageId",           1),
-                    ("members",             1),
-                    ("commandCode",         1),
-                    ("flowDirection",       1)}
-
-    fixedCase = JsonStr
-    for keyword in tvmKeywords:
-        formedKeyword = "\"{0}\":".format(keyword[0])
-        subOut = re.subn(formedKeyword, formedKeyword, fixedCase, flags=re.IGNORECASE)
-        fixedCase = subOut[0]
-        if (keyword[1] != -1 and subOut[1] > keyword[1]):
-            print("\n\nTVMC Error: Expected {1} occurence{2} of parameter \"{0}\". Found {3} in file '{4}'\n\n".format(keyword[0], keyword[1], "" if keyword[1] == 1 else "s", subOut[1], tvmFilePath))
-
-    return fixedCase
 
 if __name__ == "__main__":
     main()

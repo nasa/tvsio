@@ -402,10 +402,6 @@ def main():
             tvmJsonString = tvmFile.read()
 
         try:
-            # *** TODO: ***
-            # # Remove wholesale CamelCase replacement.
-            # # implement code that fixes capitalization as part of Levenshtein
-            tvmJsonString = cleaner.fixCase(tvmJsonString, tvmFilePath)
             tvmObject = json.loads(tvmJsonString)
         except ValueError as err:
             print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
@@ -413,13 +409,15 @@ def main():
 
         try:
             # Attempt to fix all top level TVM Parameters
-            cleaner.fixDict(tvmObject)
+            tvmObject = cleaner.fixDict(tvmObject)
 
             # Now, Attempt to fix each mapping's variable parameters
             for mapping in tvmObject['members']:
                 cleaner.fixDict(mapping, True)
+        except KeyError as err:
+            print("\n\nTVMC Error: missing required parameter '{0}' in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
         except:
-            print("\n\nTMCV Error: Encountered Levenshtein problem in file '{0}'\n".format(tvmFile))
+            print("\n\nTVMC Error: Encountered Levenshtein problem in file '{0}'\n".format(tvmFilePath))
             continue
 
         try:

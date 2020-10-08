@@ -132,19 +132,19 @@ int32 InitConnectionInfo();
 int32 ConnectToTrickVariableServer();
 int32 SendInitMessages();
 int32 TryReadMessage();
-int32 SendCommand(CFE_SB_Msg_t *msg);
-void ReceiveTaskRun();
+int32 SendTvsCommand(char *commandString); //int32 SendCommand(CFE_SB_Msg_t *msg);
+void  ReceiveTaskRun();
 
-int32  TVS_IO_InitApp(void);
-int32  TVS_IO_InitEvent(void);
-int32  TVS_IO_InitData(void);
-int32  TVS_IO_InitPipe(void);
+int32 TVS_IO_InitApp(void);
+int32 TVS_IO_InitEvent(void);
+int32 TVS_IO_InitData(void);
+int32 TVS_IO_InitPipe(void);
 
 void  TVS_IO_AppMain(void);
 
 void  TVS_IO_CleanupCallback(void);
 
-int32  TVS_IO_RcvMsg(int32 iBlocking);
+int32 TVS_IO_RcvMsg(int32 iBlocking);
 
 void  TVS_IO_ProcessNewData(void);
 void  TVS_IO_ProcessNewCmds(void);

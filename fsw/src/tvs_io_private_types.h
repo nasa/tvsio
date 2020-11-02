@@ -28,6 +28,7 @@
 ** Include Files
 */
 #include <stdint.h>
+#include <netinet/in.h>
 
 #include "cfe.h"
 
@@ -85,6 +86,14 @@ typedef struct
     uint8   ucTlmHeader[CFE_SB_TLM_HDR_SIZE];
     uint32  uiCounter;
 } TVS_IO_OutData_t;
+
+
+typedef struct
+{
+    int32 socket;
+    struct sockaddr_in serv_addr;
+
+} TVS_IO_TrickServer_t;
 
 /* TODO:  Add more private structure definitions here, if necessary. */
 

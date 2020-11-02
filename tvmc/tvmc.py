@@ -40,7 +40,8 @@ class TvsIoCodeGenerator:
 
         magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
-        magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
+        magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n"
+        magicCode += "#define TVS_IO_MAPPED_SERVERS 2\n\n"
 
         magicCode += "void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings);\n\n"
 

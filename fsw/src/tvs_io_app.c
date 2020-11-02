@@ -77,12 +77,14 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 int32 InitConnectionInfo()
 {
     OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
-    memset(&g_TVS_IO_AppData.serv_addr, '0', sizeof(struct sockaddr_in));
+    //memset(&g_TVS_IO_AppData.serv_addr, '0', sizeof(struct sockaddr_in));
+    g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_IO_MAPPED_SERVERS );
+    memset(&g_TVS_IO_AppData.servers[0], 0, sizeof(TVS_IO_TrickServer_t) * TVS_IO_MAPPED_SERVERS);
 
-    g_TVS_IO_AppData.serv_addr.sin_family = AF_INET;
-    g_TVS_IO_AppData.serv_addr.sin_port = htons(TVS_SERVER_PORT);
+    g_TVS_IO_AppData.servers[0].serv_addr.sin_family = AF_INET;
+    g_TVS_IO_AppData.servers[0].serv_addr.sin_port = htons(TVS_SERVER_PORT);
 
-    if (inet_pton(AF_INET, TVS_SERVER_IP_ADDRESS, &g_TVS_IO_AppData.serv_addr.sin_addr) <= 0)
+    if (inet_pton(AF_INET, TVS_SERVER_IP_ADDRESS, &g_TVS_IO_AppData.servers[0].serv_addr.sin_addr) <= 0)
     {
         OS_printf("\ninet_pton error occured!\n");
         return -1;
@@ -96,13 +98,13 @@ int32 ConnectToTrickVariableServer()
     OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     OS_printf("TVS_IO: Attempting to connect to TVS at %s:%d...\n", TVS_SERVER_IP_ADDRESS, TVS_SERVER_PORT);
 
-    if ((g_TVS_IO_AppData.socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ((g_TVS_IO_AppData.servers[0].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         OS_printf("TVS_IO: Error creating TVS_IO socket.\n");
         return -1;
     }
 
-    if (connect(g_TVS_IO_AppData.socket, (struct sockaddr *)&g_TVS_IO_AppData.serv_addr, sizeof(struct sockaddr_in)) < 0)
+    if (connect(g_TVS_IO_AppData.servers[0].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[0].serv_addr, sizeof(struct sockaddr_in)) < 0)
     {
         OS_printf("TVS_IO: Error: Connect Failed: %s\n", strerror(errno));
         return -1;
@@ -132,7 +134,7 @@ int32 SendInitMessages()
 
             for (int j = 0; j < mappings[i].memberCount; ++j)
             {
-                write(g_TVS_IO_AppData.socket, initMessages[j], strlen(initMessages[j])); 
+                write(g_TVS_IO_AppData.servers[0].socket, initMessages[j], strlen(initMessages[j])); 
             }
         }
     }
@@ -156,11 +158,11 @@ int32 TryReadMessage()
 
         while (headerLength < 12)
         {
-            int bytesRead = read(g_TVS_IO_AppData.socket, buffer + headerLength, 12 - headerLength);
+            int bytesRead = read(g_TVS_IO_AppData.servers[0].socket, buffer + headerLength, 12 - headerLength);
             OS_printf("***** TVSIO ***** func: %s line: %d bytesRead: %d\n", __func__, __LINE__, bytesRead);
             if (bytesRead <= 0)
             {
-                close(g_TVS_IO_AppData.socket);
+                close(g_TVS_IO_AppData.servers[0].socket);
                 return -1;
             }
             else
@@ -185,11 +187,11 @@ int32 TryReadMessage()
         // read payload into buffer
         while (payloadBytesRead < message_size)
         {
-            int bytesRead = read(g_TVS_IO_AppData.socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
+            int bytesRead = read(g_TVS_IO_AppData.servers[0].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
 
             if (bytesRead <= 0)
             {
-                close(g_TVS_IO_AppData.socket);
+                close(g_TVS_IO_AppData.servers[0].socket);
                 return -1;
             }
             else
@@ -231,7 +233,7 @@ int32 SendTvsCommand(char *commandString)
 {
     // TODO: error checking... broken connections, etc.
 
-    write(g_TVS_IO_AppData.socket, commandString, strlen(commandString));
+    write(g_TVS_IO_AppData.servers[0].socket, commandString, strlen(commandString));
 
     return 1;
 }

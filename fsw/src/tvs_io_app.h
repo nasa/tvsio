@@ -96,8 +96,9 @@ typedef struct
 
     /* TODO:  Add declarations for additional private data here */
 
-    int32 socket;
-    struct sockaddr_in serv_addr;
+    // int32 socket;
+    // struct sockaddr_in serv_addr;
+    TVS_IO_TrickServer_t * servers;
 
     uint32 receiveTaskId;
 

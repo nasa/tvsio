@@ -40,8 +40,7 @@ class TvsIoCodeGenerator:
 
         magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
-        magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n"
-        magicCode += "#define TVS_IO_MAPPED_SERVERS 2\n\n"
+        magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
 
         magicCode += "void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings);\n\n"
 
@@ -90,6 +89,7 @@ class TvsIoCodeGenerator:
                 
                 magicCode += "\tmappings[" + str(x) + "].packetType = " + str(0 if mapping.IsTelemetry else 1) + ";\n"
                 magicCode += "\tmappings[" + str(x) + "].flowDirection = " + str(mapping.FlowDirection) + ";\n"
+                magicCode += "\tmappings[" + str(x) + "].connectionIndex = " + str(mapping.ConnectionIndex) + ";\n"
 
                 if mapping.FlowDirection & 1:
 
@@ -138,11 +138,12 @@ class TvsIoCodeGenerator:
 
 class TvsIoMapping:
 
-    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None):
+    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None):
         self.MsgIdString = msgIdString
         self.MsgId = int(msgIdString, 16)
         self.FlowDirection = flowDirection
         self.CommandCode = 0 if commandCode is None else commandCode
+        self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
 
         self.IsTelemetry = True
         if ((self.MsgId & int('0x1000', 16)) >> 12 == 1):
@@ -415,13 +416,16 @@ def main():
             continue
 
         commandCode = None
-
         if "commandCode" in tvmObject:
             commandCode = tvmObject["commandCode"]
 
+        connectionIndex = None
+        if "connectionIndex" in tvmObject:
+            connectionIndex = tvmObject["connectionIndex"]
+
         nMembers = len(members)
 
-        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode)
+        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
 
         for x in range(0, nMembers):
 

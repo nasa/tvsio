@@ -39,6 +39,7 @@ class TvsIoCodeGenerator:
             magicCode += mapping.EmitIncludeMessages()
 
         magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n"
+        magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
         magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
 
@@ -125,16 +126,25 @@ class TvsIoCodeGenerator:
         return magicCode
     
     def GetTotalMemberCount(self):
-
         count = 0
+        for mapping in self.Mappings:
+            if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
+                count = count + len(mapping.MemberList)
+        return count
+
+    def GetTotalMemberPerConnCount(self):
+        # Find the highest connectionIndex to get the total number of connections, kinda sloppy
+        idxMax = 0
+        for mapping in self.Mappings:
+            if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
+                if mapping.ConnectionIndex > idxMax: idxMax = mapping.ConnectionIndex
+        count = [0] * (idxMax+1) # Create a zeroed list of length idxMax plus one
 
         for mapping in self.Mappings:
-
             if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
+                count[mapping.ConnectionIndex] = count[mapping.ConnectionIndex] + len(mapping.MemberList)
 
-                count = count + len(mapping.MemberList)
-
-        return count
+        return str(count)[1:-1]
 
 class TvsIoMapping:
 

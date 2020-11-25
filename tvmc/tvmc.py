@@ -38,7 +38,7 @@ class TvsIoCodeGenerator:
         for mapping in self.Mappings:
             magicCode += mapping.EmitIncludeMessages()
 
-        magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n"
+        magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n" #NOTE this can probably be removed
         magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
         magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"

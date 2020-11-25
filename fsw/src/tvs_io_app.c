@@ -76,54 +76,58 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 
 int32 InitConnectionInfo()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
-    //memset(&g_TVS_IO_AppData.serv_addr, '0', sizeof(struct sockaddr_in));
-    g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_IO_MAPPED_SERVERS );
-    memset(&g_TVS_IO_AppData.servers[0], 0, sizeof(TVS_IO_TrickServer_t) * TVS_IO_MAPPED_SERVERS);
+    g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
+    memset(&g_TVS_IO_AppData.servers[0], 0, sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
-    g_TVS_IO_AppData.servers[0].serv_addr.sin_family = AF_INET;
-    g_TVS_IO_AppData.servers[0].serv_addr.sin_port = htons(TVS_SERVER_PORT);
-
-    if (inet_pton(AF_INET, TVS_SERVER_IP_ADDRESS, &g_TVS_IO_AppData.servers[0].serv_addr.sin_addr) <= 0)
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        OS_printf("\ninet_pton error occured!\n");
-        return -1;
-    }
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_family = AF_INET;
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(TVS_SERVER_PORTS[conn]);
 
+        if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
+        {
+            OS_printf("\ninet_pton error occured initializing connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
+        }
+    }
     return 1;
 }
 
+//TODO should probably find a way to not continuously open sockets in the case of multiple sim connections with one connection down
 int32 ConnectToTrickVariableServer()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
-    OS_printf("TVS_IO: Attempting to connect to TVS at %s:%d...\n", TVS_SERVER_IP_ADDRESS, TVS_SERVER_PORT);
-
-    if ((g_TVS_IO_AppData.servers[0].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        OS_printf("TVS_IO: Error creating TVS_IO socket.\n");
-        return -1;
+        OS_printf("TVS_IO: Attempting to connect to TVS connection %d - %s:%d\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+
+        if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        {
+            OS_printf("TVS_IO: Error creating TVS connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
+        }
+
+        if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
+        {
+            OS_printf("TVS_IO: Error: Connect to TVS %d - %s:%d Failed with error: %s\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn], strerror(errno));
+            return -1;
+        }
+
+        OS_printf("TVS_IO: Connection to TVS %d - %s:%d successful!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
     }
-
-    if (connect(g_TVS_IO_AppData.servers[0].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[0].serv_addr, sizeof(struct sockaddr_in)) < 0)
-    {
-        OS_printf("TVS_IO: Error: Connect Failed: %s\n", strerror(errno));
-        return -1;
-    }
-
-    OS_printf("TVS_IO: Connection to TVS successful!\n");
-
     return 1;
 }
 
 int32 SendInitMessages()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    SendTvsCommand(TVS_PAUSE_CMD);
-    SendTvsCommand(TVS_SET_BINARY_NO_NAMES);
-    SendTvsCommand(TVS_SET_COPY_MODE_CMD);
-    SendTvsCommand(TVS_SET_WRITE_MODE_CMD);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        SendTvsMessage(conn, TVS_PAUSE_CMD);
+        SendTvsMessage(conn, TVS_SET_BINARY_NO_NAMES);
+        SendTvsMessage(conn, TVS_SET_COPY_MODE_CMD);
+        SendTvsMessage(conn, TVS_SET_WRITE_MODE_CMD);
+    }
 
     // send out application-specific init messages...
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
@@ -134,12 +138,15 @@ int32 SendInitMessages()
 
             for (int j = 0; j < mappings[i].memberCount; ++j)
             {
-                write(g_TVS_IO_AppData.servers[0].socket, initMessages[j], strlen(initMessages[j])); 
+                SendTvsMessage(mappings[i].connectionIndex, initMessages[j]);
             }
         }
     }
 
-    SendTvsCommand(TVS_UNPAUSE_CMD);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        SendTvsMessage(conn, TVS_UNPAUSE_CMD);
+    }
 
     return 1;
 }
@@ -147,78 +154,88 @@ int32 SendInitMessages()
 int32 TryReadMessage()
 {
     OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
-    g_TVS_IO_AppData.frameDataBufferLength = 0;
 
-    uint32 vars_received = 0;
-
-    while (vars_received < TVS_IO_TOTAL_VAR_COUNT)
-    {
-        int headerLength = 0;
-        char buffer[8192];
-
-        while (headerLength < 12)
+    uint32 vars_received; 
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
+        // Because it is possible for trick to send multiple messages for large buffers, 
+        // we loop and count the number of vars received for each connection to make sure we get it all.
+        vars_received = 0; 
+        g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength = 0;
+        while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
         {
-            int bytesRead = read(g_TVS_IO_AppData.servers[0].socket, buffer + headerLength, 12 - headerLength);
-            OS_printf("***** TVSIO ***** func: %s line: %d bytesRead: %d\n", __func__, __LINE__, bytesRead);
-            if (bytesRead <= 0)
-            {
-                close(g_TVS_IO_AppData.servers[0].socket);
-                return -1;
-            }
-            else
-            {
-                headerLength += bytesRead;
-            }
-        }
+            int headerLength = 0;
+            char buffer[8192]; // Max message size trick will send
 
-        int message_indicator = -1, message_size = -1, n_vars = -1;
+            // Read the 12 byte header from the socket
+            while (headerLength < 12)
+            {
+                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
+                if (bytesRead <= 0)
+                {
+                    close(g_TVS_IO_AppData.servers[conn].socket);
+                    return -1;
+                }
+                else
+                {
+                    headerLength += bytesRead;
+                }
+            }
 
-        memcpy(&message_indicator, &buffer[0], 4);
-        memcpy(&message_size, &buffer[4], 4);
-        memcpy(&n_vars, &buffer[8], 4);
+            int message_indicator = -1, message_size = -1, n_vars = -1;
+
+            memcpy(&message_indicator, &buffer[0], 4);
+            memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
+            memcpy(&n_vars, &buffer[8], 4);
         
-        vars_received += n_vars;
-        OS_printf("***** TVSIO ***** func: %s line: %d vars_received: %d\n", __func__, __LINE__, vars_received);
+            vars_received += n_vars;
 
-        message_size -= 8; // chop off the header bytes from msg size
+            message_size -= 8; // chop off the header bytes from msg size
 
-        int payloadBytesRead = 0;
+            int payloadBytesRead = 0;
 
-        // read payload into buffer
-        while (payloadBytesRead < message_size)
-        {
-            int bytesRead = read(g_TVS_IO_AppData.servers[0].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
-
-            if (bytesRead <= 0)
+            // read payload into buffer
+            while (payloadBytesRead < message_size)
             {
-                close(g_TVS_IO_AppData.servers[0].socket);
-                return -1;
+                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
+
+                if (bytesRead <= 0)
+                {
+                    close(g_TVS_IO_AppData.servers[conn].socket);
+                    //TODO add a warning message here
+                    return -1;
+                }
+                else
+                {
+                    payloadBytesRead += bytesRead;
+                }
             }
-            else
-            {
-                payloadBytesRead += bytesRead;
-            }
+
+            // copy data from read buffer into frame data buffer
+            memcpy(g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer + g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength,
+                    buffer, payloadBytesRead);
+
+            g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength += payloadBytesRead;
         }
-
-        // copy data from read buffer into frame data buffer
-        memcpy(g_TVS_IO_AppData.frameDataBuffer + g_TVS_IO_AppData.frameDataBufferLength,
-                buffer, payloadBytesRead);
-
-        g_TVS_IO_AppData.frameDataBufferLength += payloadBytesRead;
     }
 
     // process the frame data one mapping at a time
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    uint32_t byteOffset = 0;
+    //uint32_t byteOffsets[TVS_NUM_SIM_CONN] = { 0 };
+    uint32_t byteOffsets[TVS_NUM_SIM_CONN];
+    for(int i =0; i <TVS_NUM_SIM_CONN; ++i) {
+        byteOffsets[i] = 0;
+    }
+    uint8_t connIdx = 0; //shorthand
 
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
     {
         if (mappings[i].flowDirection & TrickToCfs)
         {
+            connIdx = mappings[i].connectionIndex;
             void *unpackedDataBuffer = mappings[i].unpackedDataBuffer;
 
-            byteOffset += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffer + byteOffset);
+            byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
             CFE_SB_TimeStampMsg((CFE_SB_Msg_t *) mappings[i].unpackedDataBuffer);
             OS_printf("***** TVSIO ***** func: %s line: %d send Msg \n", __func__, __LINE__);
@@ -229,12 +246,18 @@ int32 TryReadMessage()
     return 1;
 }
 
+
 int32 SendTvsCommand(char *commandString)
 {
     // TODO: error checking... broken connections, etc.
-
     write(g_TVS_IO_AppData.servers[0].socket, commandString, strlen(commandString));
+    return 1;
+}
 
+int32 SendTvsMessage(int conn, char *commandString)
+{
+    // TODO: error checking... broken connections, etc.
+    write(g_TVS_IO_AppData.servers[conn].socket, commandString, strlen(commandString));
     return 1;
 }
 
@@ -556,7 +579,9 @@ int32 TVS_IO_InitData()
     CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
                    TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), TRUE);
 
-    g_TVS_IO_AppData.frameDataBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
+        g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
+    }
 
     return (iStatus);
 }

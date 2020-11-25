@@ -96,8 +96,8 @@ typedef struct
 
     /* TODO:  Add declarations for additional private data here */
 
-    // int32 socket;
-    // struct sockaddr_in serv_addr;
+    //NOTE this can also be declared an array at compile time since user should have set TVS_NUM_SIM_CONN
+    //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // Decide which is the best approach
     TVS_IO_TrickServer_t * servers;
 
     uint32 receiveTaskId;
@@ -107,6 +107,8 @@ typedef struct
     // this buffer is designed to hold an entire frame's worth of data for processing
     char *frameDataBuffer;
     uint32 frameDataBufferLength;
+
+    TVS_IO_FrameDataBuffer_t frameDataBuffers[TVS_NUM_SIM_CONN];
 
 } TVS_IO_AppData_t;
 
@@ -133,7 +135,8 @@ int32 InitConnectionInfo();
 int32 ConnectToTrickVariableServer();
 int32 SendInitMessages();
 int32 TryReadMessage();
-int32 SendTvsCommand(char *commandString); //int32 SendCommand(CFE_SB_Msg_t *msg);
+int32 SendTvsCommand(char *commandString); //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
+int32 SendTvsMessage(int conn, char *commandString);
 void  ReceiveTaskRun();
 
 int32 TVS_IO_InitApp(void);

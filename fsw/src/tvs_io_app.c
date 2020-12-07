@@ -799,7 +799,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
     {
         MsgId = CFE_SB_GetMsgId(MsgPtr);
         switch (MsgId)
-	{
+        {
             case TVS_IO_WAKEUP_MID:
                 TVS_IO_ProcessNewCmds();
                 TVS_IO_ProcessNewData();
@@ -1321,6 +1321,7 @@ void TVS_IO_AppMain()
             {
                 uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
                 uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
+                OS_printf("***** TVSIO ***** func: %s line: %d, mid %d, cmdCode %d\n", __func__, __LINE__,mid,cmdCode);
 
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
                 {
@@ -1335,9 +1336,9 @@ void TVS_IO_AppMain()
 
                         mappings[i].pack(cmdBuffer, trickCmdMsgPtr);
 
-                        for (int j = 0; j < mappings[i].memberCount; ++j)
-                            SendTvsCommand(cmdBuffer[j]);
-
+                        for (int j = 0; j < mappings[i].memberCount; ++j) {
+                            SendTvsMessage(mappings[i].connectionIndex, cmdBuffer[j]);
+                        }
                         break;
                     }
                 }

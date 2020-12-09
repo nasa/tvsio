@@ -105,9 +105,6 @@ typedef struct
     TVS_IO_Mapping mappings[TVS_IO_MAPPING_COUNT];
 
     // this buffer is designed to hold an entire frame's worth of data for processing
-    char *frameDataBuffer;
-    uint32 frameDataBufferLength;
-
     TVS_IO_FrameDataBuffer_t frameDataBuffers[TVS_NUM_SIM_CONN];
 
 } TVS_IO_AppData_t;

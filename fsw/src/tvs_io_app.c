@@ -27,6 +27,7 @@
 **   Date | Author | Description
 **   ---------------------------
 **   2018-03-08 | Nexsys | Build #: Code Started
+**   2020-12-XX | Nexsys | Multi-sim support capability added
 **
 **=====================================================================================*/
 
@@ -93,7 +94,7 @@ int32 InitConnectionInfo()
     return 1;
 }
 
-//TODO should probably find a way to not continuously open sockets in the case of multiple sim connections with one connection down
+//TODO should probably find a way to not continuously open sockets in the case of multiple sim connections with one connection down -JWP
 int32 ConnectToTrickVariableServer()
 {
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
@@ -153,8 +154,6 @@ int32 SendInitMessages()
 
 int32 TryReadMessage()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
-
     uint32 vars_received; 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
         // Because it is possible for trick to send multiple messages for large buffers, 
@@ -164,6 +163,7 @@ int32 TryReadMessage()
         while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
         {
             int headerLength = 0;
+            //TODO shouldn't we allocate this outside of the loop, and just clear the buffer? -JWP
             char buffer[8192]; // Max message size trick will send
 
             // Read the 12 byte header from the socket
@@ -201,7 +201,7 @@ int32 TryReadMessage()
                 if (bytesRead <= 0)
                 {
                     close(g_TVS_IO_AppData.servers[conn].socket);
-                    //TODO add a warning message here
+                    //TODO add a warning message here -JWP
                     return -1;
                 }
                 else
@@ -238,19 +238,10 @@ int32 TryReadMessage()
             byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
             CFE_SB_TimeStampMsg((CFE_SB_Msg_t *) mappings[i].unpackedDataBuffer);
-            OS_printf("***** TVSIO ***** func: %s line: %d send Msg \n", __func__, __LINE__);
             CFE_SB_SendMsg((CFE_SB_Msg_t*)mappings[i].unpackedDataBuffer);
         }
     }
 
-    return 1;
-}
-
-
-int32 SendTvsCommand(char *commandString)
-{
-    // TODO: error checking... broken connections, etc.
-    write(g_TVS_IO_AppData.servers[0].socket, commandString, strlen(commandString));
     return 1;
 }
 
@@ -263,7 +254,6 @@ int32 SendTvsMessage(int conn, char *commandString)
 
 void ReceiveTaskRun()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     while(1)
     {
         int32 success = TryReadMessage();
@@ -321,7 +311,6 @@ void ReceiveTaskRun()
 **=====================================================================================*/
 int32 TVS_IO_InitEvent()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int32  iStatus=CFE_SUCCESS;
 
     /* Create the event table */
@@ -404,7 +393,6 @@ int32 TVS_IO_InitEvent()
 **=====================================================================================*/
 int32 TVS_IO_InitPipe()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int32  iStatus=CFE_SUCCESS;
 
     /* Init schedule pipe */
@@ -563,7 +551,6 @@ TVS_IO_InitPipe_Exit_Tag:
 **=====================================================================================*/
 int32 TVS_IO_InitData()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int32  iStatus=CFE_SUCCESS;
 
     /* Init input data */
@@ -632,7 +619,6 @@ int32 TVS_IO_InitData()
 **=====================================================================================*/
 int32 TVS_IO_InitApp()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int32  iStatus=CFE_SUCCESS;
 
     g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_RUN;
@@ -730,7 +716,6 @@ TVS_IO_InitApp_Exit_Tag:
 **=====================================================================================*/
 void TVS_IO_CleanupCallback()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     /* Add code to cleanup memory and other cleanup here */
 }
     
@@ -781,7 +766,6 @@ void TVS_IO_CleanupCallback()
 **=====================================================================================*/
 int32 TVS_IO_RcvMsg(int32 iBlocking)
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int32           iStatus=CFE_SUCCESS;
     CFE_SB_Msg_t*   MsgPtr=NULL;
     CFE_SB_MsgId_t  MsgId;
@@ -874,7 +858,6 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 **=====================================================================================*/
 void TVS_IO_ProcessNewData()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int iStatus = CFE_SUCCESS;
     CFE_SB_Msg_t*   TlmMsgPtr=NULL;
     CFE_SB_MsgId_t  TlmMsgId;
@@ -959,7 +942,6 @@ void TVS_IO_ProcessNewData()
 **=====================================================================================*/
 void TVS_IO_ProcessNewCmds()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     int iStatus = CFE_SUCCESS;
     CFE_SB_Msg_t*   CmdMsgPtr=NULL;
     CFE_SB_MsgId_t  CmdMsgId;
@@ -1051,7 +1033,6 @@ void TVS_IO_ProcessNewCmds()
 **=====================================================================================*/
 void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     uint32  uiCmdCode=0;
 
     if (MsgPtr != NULL)
@@ -1167,7 +1148,6 @@ void TVS_IO_ReportHousekeeping()
 **=====================================================================================*/
 void TVS_IO_SendOutData()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
     CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
 }
@@ -1214,7 +1194,6 @@ void TVS_IO_SendOutData()
 boolean TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
                            uint16 usExpectedLen)
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     boolean bResult=FALSE;
     uint16  usMsgLen=0;
 
@@ -1285,7 +1264,6 @@ boolean TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
 **=====================================================================================*/
 void TVS_IO_AppMain()
 {
-    OS_printf("***** TVSIO ***** func: %s line: %d\n", __func__, __LINE__);
     /* Register the application with Executive Services */
     CFE_ES_RegisterApp();
 
@@ -1321,7 +1299,6 @@ void TVS_IO_AppMain()
             {
                 uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
                 uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
-                OS_printf("***** TVSIO ***** func: %s line: %d, mid %d, cmdCode %d\n", __func__, __LINE__,mid,cmdCode);
 
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
                 {
@@ -1365,4 +1342,3 @@ void TVS_IO_AppMain()
 /*=======================================================================================
 ** End of file tvs_io_app.c
 **=====================================================================================*/
-    

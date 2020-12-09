@@ -377,6 +377,8 @@ def main():
     characterArrayRegex = re.compile("char\[([0-9]+)\]")
 
     tvm_files = []
+    fileObjects = ""
+    tvmObjectList = []
 
     # handle wild-card characters b.c. sometimes they come through w/o being globbed
     for filePath in args.tvm_files:
@@ -406,11 +408,18 @@ def main():
             tvmJsonString = tvmFile.read()
 
         try:
-            tvmObject = json.loads(tvmJsonString)
+            fileObjects = json.loads(tvmJsonString)
         except ValueError as err:
             print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
             continue
+        
+        if isinstance(fileObjects, list):
+            for singleTemp in fileObjects:
+                tvmObjectList.append(singleTemp)
+        else:
+            tvmObjectList.append(fileObjects)
 
+    for tvmObject in tvmObjectList:
         try:
             msgId = tvmObject['messageId']
             cfsStructureType = tvmObject['cfsStructureType']

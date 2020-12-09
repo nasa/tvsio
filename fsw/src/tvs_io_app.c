@@ -78,7 +78,7 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 int32 InitConnectionInfo()
 {
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
-    memset(&g_TVS_IO_AppData.servers[0], 0, sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
+    memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {

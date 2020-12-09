@@ -384,8 +384,12 @@ def main():
         if filePath.endswith("*") or filePath.endswith("*.tvm"):
             
             basePath = os.path.dirname(os.path.abspath(filePath))
-            
-            fileNames = os.listdir(basePath)
+
+            try:
+                fileNames = os.listdir(basePath)
+            except Exception:
+                print("\n\nDir '{0}' does not exist\n".format(filePath))
+                fileNames = []
 
             for fileName in fileNames:
                 tvm_files.append(basePath + fileName)

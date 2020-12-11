@@ -8,14 +8,17 @@ import re
 ##### Main classes for code-gen & defining a TVS IO Mapping #####
 #################################################################
 
+# TODO Add in a generated header that indicates source files, date/time, git commit, etc.. -JWP
+
 # TODO: you're mixing some pretty nasty class naming conventions...
-#       clean that up before this gets too far...
+#       clean that up before this gets too far... 
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP
 
 # TODO: you will need to update the generated code & CFS app to interpret
 #       multiple messages possibly from TVS per frame... this is b.c. 
 #       TVS has a max msg size as well as member count apparently...
-#       
 #       need to test to verify how all that works...
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP
 
 class TvsIoCodeGenerator:
 
@@ -38,7 +41,6 @@ class TvsIoCodeGenerator:
         for mapping in self.Mappings:
             magicCode += mapping.EmitIncludeMessages()
 
-        magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n" #NOTE this can probably be removed
         magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
         magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
@@ -95,6 +97,7 @@ class TvsIoCodeGenerator:
                 if mapping.FlowDirection & 1:
 
                     magicCode += "\tmappings[" + str(x) + "].initMessages = " + mapping.InitMessagesMemberName + ";\n"
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
                     
                     magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
@@ -107,8 +110,10 @@ class TvsIoCodeGenerator:
 
                 if mapping.FlowDirection & 2:
 
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].packedCommandBuffer = (char**)malloc(" + str(mapping.MemberCount()) + "*sizeof(char*));\n"
                     magicCode += "\tfor (int i = 0; i < " + str(mapping.MemberCount()) + "; ++i)\n"
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\t\tmappings[" + str(x) + "].packedCommandBuffer[i] = (char*)malloc(" + str(self.MaxCmdStrlen) + ");\n\n"
 
                     magicCode += "\tmappings[" + str(x) + "].pack = " + mapping.PackFunctionName + ";\n\n"
@@ -125,13 +130,6 @@ class TvsIoCodeGenerator:
         
         return magicCode
     
-    def GetTotalMemberCount(self):
-        count = 0
-        for mapping in self.Mappings:
-            if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
-                count = count + len(mapping.MemberList)
-        return count
-
     def GetTotalMemberPerConnCount(self):
         # Find the highest connectionIndex to get the total number of connections, kinda sloppy
         idxMax = 0

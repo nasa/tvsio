@@ -96,8 +96,8 @@ typedef struct
 
     /* TODO:  Add declarations for additional private data here */
 
-    //NOTE this can also be declared an array at compile time since user should have set TVS_NUM_SIM_CONN
-    //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // Decide which is the best approach
+    //NOTE this can also be declared a static array at compile time since user should have set TVS_NUM_SIM_CONN, similarly to frameDataBuffers below
+    //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // TODO Decide which is the best approach -JWP
     TVS_IO_TrickServer_t * servers;
 
     uint32 receiveTaskId;
@@ -132,8 +132,7 @@ int32 InitConnectionInfo();
 int32 ConnectToTrickVariableServer();
 int32 SendInitMessages();
 int32 TryReadMessage();
-int32 SendTvsCommand(char *commandString); //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
-int32 SendTvsMessage(int conn, char *commandString);
+int32 SendTvsMessage(int conn, char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
 void  ReceiveTaskRun();
 
 int32 TVS_IO_InitApp(void);

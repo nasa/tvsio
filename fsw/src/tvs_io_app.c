@@ -77,6 +77,8 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 
 int32 InitConnectionInfo()
 {
+    /* Initialize trick variable server socket connections */
+    //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
     memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
@@ -94,7 +96,7 @@ int32 InitConnectionInfo()
     return 1;
 }
 
-//TODO should probably find a way to not continuously open sockets in the case of multiple sim connections with one connection down -JWP
+//TODO should probably find a way to avoid continuously opening sockets in the case of multiple sim connections with sim not running yet -JWP
 int32 ConnectToTrickVariableServer()
 {
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
@@ -154,10 +156,10 @@ int32 SendInitMessages()
 
 int32 TryReadMessage()
 {
+    /* Because it is possible for trick to send multiple messages for large buffers, 
+       we loop and count the number of vars received for each connection to make sure we get it all. */
     uint32 vars_received; 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
-        // Because it is possible for trick to send multiple messages for large buffers, 
-        // we loop and count the number of vars received for each connection to make sure we get it all.
         vars_received = 0; 
         g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength = 0;
         while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
@@ -173,6 +175,7 @@ int32 TryReadMessage()
                 if (bytesRead <= 0)
                 {
                     close(g_TVS_IO_AppData.servers[conn].socket);
+                    //TODO add a warning message here -JWP
                     return -1;
                 }
                 else
@@ -183,6 +186,7 @@ int32 TryReadMessage()
 
             int message_indicator = -1, message_size = -1, n_vars = -1;
 
+            /* Get useful info from the header */
             memcpy(&message_indicator, &buffer[0], 4);
             memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
             memcpy(&n_vars, &buffer[8], 4);
@@ -221,13 +225,13 @@ int32 TryReadMessage()
     // process the frame data one mapping at a time
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    //uint32_t byteOffsets[TVS_NUM_SIM_CONN] = { 0 };
     uint32_t byteOffsets[TVS_NUM_SIM_CONN];
     for(int i =0; i <TVS_NUM_SIM_CONN; ++i) {
         byteOffsets[i] = 0;
     }
-    uint8_t connIdx = 0; //shorthand
+    uint8_t connIdx = 0; // shorthand convenience variable
 
+    /* Process the data from trick by placing into the MIDs and sending on the SB for other apps to pick up */
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
     {
         if (mappings[i].flowDirection & TrickToCfs)
@@ -245,6 +249,7 @@ int32 TryReadMessage()
     return 1;
 }
 
+/* Sends a message to trick */
 int32 SendTvsMessage(int conn, char *commandString)
 {
     // TODO: error checking... broken connections, etc.
@@ -252,12 +257,15 @@ int32 SendTvsMessage(int conn, char *commandString)
     return 1;
 }
 
+/* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
     while(1)
     {
+        /* Tries to read the messages from trick variable server(s) */
         int32 success = TryReadMessage();
 
+        /* Loop and try to connect to trick if we were unable to read*/
         if (success < 0)
         {
             while (ConnectToTrickVariableServer() < 0)
@@ -265,9 +273,11 @@ void ReceiveTaskRun()
                 OS_TaskDelay(3000); // wait a few secs and try again...
             }
 
+            /* Configures the trick variable server connection */
             SendInitMessages();
         }
-    }
+    } //TODO should we have a better while loop condition? -JWP
+      // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
 }
 
 /*=====================================================================================
@@ -489,6 +499,7 @@ int32 TVS_IO_InitPipe()
                                 g_TVS_IO_AppData.trickPipeDepth,
                                 g_TVS_IO_AppData.trickPipeName);
 
+    /* Subscribe to the MIDs we pull data from for sending to trick */
     if (iStatus == CFE_SUCCESS)
     {
         for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
@@ -566,6 +577,9 @@ int32 TVS_IO_InitData()
     CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
                    TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), TRUE);
 
+    /* Creates data buffers for storing data from trick */
+    //TODO these buffers need to be cleaned up with free() -JWP
+    //TODO Should the buffers be initialized to zero or NULL? -JWP
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
         g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
     }
@@ -619,10 +633,11 @@ int32 TVS_IO_InitData()
 **=====================================================================================*/
 int32 TVS_IO_InitApp()
 {
-    int32  iStatus=CFE_SUCCESS;
+    int32 iStatus = CFE_SUCCESS;
 
     g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_RUN;
 
+    /* Register TVSIO with cfe executive services */
     iStatus = CFE_ES_RegisterApp();
     if (iStatus != CFE_SUCCESS)
     {
@@ -630,8 +645,10 @@ int32 TVS_IO_InitApp()
         goto TVS_IO_InitApp_Exit_Tag;
     }
 
+    /* Calls generated code to initialize messages and buffers for each mapping in the tvm file(s) */
     TVS_IO_InitGeneratedCode(g_TVS_IO_AppData.mappings);
 
+    /* Lots of initializing */
     if ((TVS_IO_InitEvent() != CFE_SUCCESS) || 
         (TVS_IO_InitPipe() != CFE_SUCCESS) || 
         (TVS_IO_InitData() != CFE_SUCCESS))
@@ -640,13 +657,18 @@ int32 TVS_IO_InitApp()
         goto TVS_IO_InitApp_Exit_Tag;
     }
 
+    /* Initialize socket connection data for trick variable servers */
     InitConnectionInfo();
 
+    /* Create sockets and try to connect once */
+    //TODO I'm not sure why we do this here when we end up doing it again for ReceiveTaskRun() -JWP
+    // can maybe just remove?
     if (ConnectToTrickVariableServer() > 0)
     {
         SendInitMessages();
     }
 
+    /* Create a child task which will connect to trick variable server and continuously read from trick sockets */
     iStatus = CFE_ES_CreateChildTask(&g_TVS_IO_AppData.receiveTaskId,
                                         "TVS_IO_RcvTask",
                                         (CFE_ES_ChildTaskMainFuncPtr_t)&ReceiveTaskRun,
@@ -716,7 +738,7 @@ TVS_IO_InitApp_Exit_Tag:
 **=====================================================================================*/
 void TVS_IO_CleanupCallback()
 {
-    /* Add code to cleanup memory and other cleanup here */
+    //TODO Add code to cleanup memory and other cleanup here -JWP
 }
     
 /*=====================================================================================
@@ -766,6 +788,7 @@ void TVS_IO_CleanupCallback()
 **=====================================================================================*/
 int32 TVS_IO_RcvMsg(int32 iBlocking)
 {
+    /* NOTE this is not where we receive trick or SB messages to send to trick */
     int32           iStatus=CFE_SUCCESS;
     CFE_SB_Msg_t*   MsgPtr=NULL;
     CFE_SB_MsgId_t  MsgId;
@@ -1271,6 +1294,7 @@ void TVS_IO_AppMain()
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 
     /* Perform application initializations */
+    /* This will spawn a child task which will handle reading from trick */
     if (TVS_IO_InitApp() != CFE_SUCCESS)
     {
         g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_ERROR;
@@ -1284,15 +1308,17 @@ void TVS_IO_AppMain()
     int32 iStatus = CFE_SUCCESS;
     CFE_SB_Msg_t *trickCmdMsgPtr = NULL;
 
-    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
+    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings; // local convenience pointer
 
     /* Application main loop */
     while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
     {
         OS_TaskDelay(100);
 
+        /* This will handle sending data to trick */
         while(1)
         {
+            /* Get the message from the software bus */
             iStatus = CFE_SB_RcvMsg(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
 
             if (iStatus == CFE_SUCCESS)
@@ -1300,6 +1326,7 @@ void TVS_IO_AppMain()
                 uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
                 uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
 
+                /* If this MID and CC are used for any mappings, pack the message and send it to trick */
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
                 {
                     if ((mappings[i].msgId == mid) && (mappings[i].flowDirection & CfsToTrick))

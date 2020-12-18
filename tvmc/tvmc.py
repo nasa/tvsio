@@ -8,14 +8,17 @@ import re
 ##### Main classes for code-gen & defining a TVS IO Mapping #####
 #################################################################
 
+# TODO Add in a generated header that indicates source files, date/time, git commit, etc.. -JWP
+
 # TODO: you're mixing some pretty nasty class naming conventions...
-#       clean that up before this gets too far...
+#       clean that up before this gets too far... 
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP
 
 # TODO: you will need to update the generated code & CFS app to interpret
 #       multiple messages possibly from TVS per frame... this is b.c. 
 #       TVS has a max msg size as well as member count apparently...
-#       
 #       need to test to verify how all that works...
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP       
 
 class TvsIoCodeGenerator:
 

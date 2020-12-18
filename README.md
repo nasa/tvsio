@@ -1,4 +1,6 @@
-This is the TVS-IO (CFS embedded) app repo
+This is the TVS-IO (CFS embedded) app repo.
+
+
 Visit the [TVS-IO App Wiki](https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/home) for information on how TVS-IO works, cloning, configuring, building, and running.
 
 Old README info, to be removed when wiki construction is finished:

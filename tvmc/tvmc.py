@@ -18,7 +18,7 @@ import re
 #       multiple messages possibly from TVS per frame... this is b.c. 
 #       TVS has a max msg size as well as member count apparently...
 #       need to test to verify how all that works...
-# NOTE: I'm not sure where this todo is from and if its been todone -JWP
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP       
 
 class TvsIoCodeGenerator:
 

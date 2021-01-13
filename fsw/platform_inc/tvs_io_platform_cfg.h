@@ -32,9 +32,12 @@
 
 #define TVS_IO_TIMEOUT_MSEC    1000
 
-#define TVS_SERVER_IP_ADDRESS "127.0.0.1"
-
-#define TVS_SERVER_PORT 17000
+#define TVS_NUM_SIM_CONN 2
+static const char *TVS_SERVER_IPS[TVS_NUM_SIM_CONN] = {"127.0.0.1", "127.0.0.1"};
+static const int TVS_SERVER_PORTS[TVS_NUM_SIM_CONN] = {17000, 17001};
+//#define TVS_NUM_SIM_CONN 1
+//static const char *TVS_SERVER_IPS[TVS_NUM_SIM_CONN] = {"127.0.0.1"};
+//static const int TVS_SERVER_PORTS[TVS_NUM_SIM_CONN] = {17000};
 
 #define TVS_PAUSE_CMD "trick.var_pause()\n"
 

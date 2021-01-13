@@ -41,7 +41,7 @@ class TvsIoCodeGenerator:
         for mapping in self.Mappings:
             magicCode += mapping.EmitIncludeMessages()
 
-        magicCode += "\n#define TVS_IO_TOTAL_VAR_COUNT " + str(self.GetTotalMemberCount()) + "\n"
+        magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
         magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
 
@@ -92,10 +92,12 @@ class TvsIoCodeGenerator:
                 
                 magicCode += "\tmappings[" + str(x) + "].packetType = " + str(0 if mapping.IsTelemetry else 1) + ";\n"
                 magicCode += "\tmappings[" + str(x) + "].flowDirection = " + str(mapping.FlowDirection) + ";\n"
+                magicCode += "\tmappings[" + str(x) + "].connectionIndex = " + str(mapping.ConnectionIndex) + ";\n"
 
                 if mapping.FlowDirection & 1:
 
                     magicCode += "\tmappings[" + str(x) + "].initMessages = " + mapping.InitMessagesMemberName + ";\n"
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
                     
                     magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
@@ -108,8 +110,10 @@ class TvsIoCodeGenerator:
 
                 if mapping.FlowDirection & 2:
 
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].packedCommandBuffer = (char**)malloc(" + str(mapping.MemberCount()) + "*sizeof(char*));\n"
                     magicCode += "\tfor (int i = 0; i < " + str(mapping.MemberCount()) + "; ++i)\n"
+                    #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\t\tmappings[" + str(x) + "].packedCommandBuffer[i] = (char*)malloc(" + str(self.MaxCmdStrlen) + ");\n\n"
 
                     magicCode += "\tmappings[" + str(x) + "].pack = " + mapping.PackFunctionName + ";\n\n"
@@ -126,25 +130,28 @@ class TvsIoCodeGenerator:
         
         return magicCode
     
-    def GetTotalMemberCount(self):
-
-        count = 0
+    def GetTotalMemberPerConnCount(self):
+        # Find the highest connectionIndex to get the total number of connections, kinda sloppy
+        idxMax = 0
+        for mapping in self.Mappings:
+            if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
+                if mapping.ConnectionIndex > idxMax: idxMax = mapping.ConnectionIndex
+        count = [0] * (idxMax+1) # Create a zeroed list of length idxMax plus one
 
         for mapping in self.Mappings:
-
             if mapping.FlowDirection == 1 or mapping.FlowDirection == 3:
+                count[mapping.ConnectionIndex] = count[mapping.ConnectionIndex] + len(mapping.MemberList)
 
-                count = count + len(mapping.MemberList)
-
-        return count
+        return str(count)[1:-1]
 
 class TvsIoMapping:
 
-    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None):
+    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None):
         self.MsgIdString = msgIdString
         self.MsgId = int(msgIdString, 16)
         self.FlowDirection = flowDirection
         self.CommandCode = 0 if commandCode is None else commandCode
+        self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
 
         self.IsTelemetry = True
         if ((self.MsgId & int('0x1000', 16)) >> 12 == 1):
@@ -368,6 +375,8 @@ def main():
     characterArrayRegex = re.compile("char\[([0-9]+)\]")
 
     tvm_files = []
+    fileObjects = ""
+    tvmObjectList = []
 
     # handle wild-card characters b.c. sometimes they come through w/o being globbed
     for filePath in args.tvm_files:
@@ -401,11 +410,18 @@ def main():
             tvmJsonString = tvmFile.read()
 
         try:
-            tvmObject = json.loads(tvmJsonString)
+            fileObjects = json.loads(tvmJsonString)
         except ValueError as err:
             print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
             continue
+        
+        if isinstance(fileObjects, list):
+            for singleTemp in fileObjects:
+                tvmObjectList.append(singleTemp)
+        else:
+            tvmObjectList.append(fileObjects)
 
+    for tvmObject in tvmObjectList:
         try:
             msgId = tvmObject['messageId']
             cfsStructureType = tvmObject['cfsStructureType']
@@ -421,13 +437,16 @@ def main():
             continue
 
         commandCode = None
-
         if "commandCode" in tvmObject:
             commandCode = tvmObject["commandCode"]
 
+        connectionIndex = None
+        if "connectionIndex" in tvmObject:
+            connectionIndex = tvmObject["connectionIndex"]
+
         nMembers = len(members)
 
-        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode)
+        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
 
         for x in range(0, nMembers):
 

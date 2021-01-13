@@ -38,8 +38,12 @@ class TvsIoCodeGenerator:
         magicCode += "#include \"cfe_sb.h\"\n\n"
         magicCode += "#include \"tvs_io_private_types.h\"\n\n"
 
+        # Add mapping includes, but only once each
+        includedDict = {}
         for mapping in self.Mappings:
-            magicCode += mapping.EmitIncludeMessages()
+            if mapping.CfsStructureFilename not in includedDict:
+                magicCode += mapping.EmitIncludeMessages()
+                includedDict[mapping.CfsStructureFilename] = 1
 
         magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"

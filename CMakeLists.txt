@@ -18,7 +18,7 @@ set(APP_SRC_FILES
 
 add_custom_target(
     run_tvmc ALL
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h mybogusfile.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h
     COMMENT "Generates code from *.tvm files during tvs_io build"
 )
 
@@ -35,10 +35,11 @@ else()
 
 endif()
 
-# had to add "mybogusfile.h" which is never generated so the custom target above would always force this command to run
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h mybogusfile.h
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h
     COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_SOURCE_DIR}/fsw/src"
+    DEPENDS 
+        ../inc/tvm_files/*.tvm
 )
 
 # Create the app module

@@ -277,7 +277,7 @@ void ReceiveTaskRun()
             SendInitMessages();
         }
     } //TODO should we have a better while loop condition? -JWP
-      // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
+      // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
 }
 
 /*=====================================================================================
@@ -344,7 +344,7 @@ int32 TVS_IO_InitEvent()
 
     /* Register the table with CFE */
     iStatus = CFE_EVS_Register(g_TVS_IO_AppData.EventTbl,
-                               TVS_IO_EVT_CNT, CFE_EVS_BINARY_FILTER);
+                               TVS_IO_EVT_CNT, CFE_EVS_EventFilter_BINARY);
     if (iStatus != CFE_SUCCESS)
     {
         CFE_ES_WriteToSysLog("TVS_IO - Failed to register with EVS (0x%08X)\n", iStatus);
@@ -570,12 +570,12 @@ int32 TVS_IO_InitData()
     /* Init output data */
     memset((void*)&g_TVS_IO_AppData.OutData, 0x00, sizeof(g_TVS_IO_AppData.OutData));
     CFE_SB_InitMsg(&g_TVS_IO_AppData.OutData,
-                   TVS_IO_OUT_DATA_MID, sizeof(g_TVS_IO_AppData.OutData), TRUE);
+                   TVS_IO_OUT_DATA_MID, sizeof(g_TVS_IO_AppData.OutData), true);
 
     /* Init housekeeping packet */
     memset((void*)&g_TVS_IO_AppData.HkTlm, 0x00, sizeof(g_TVS_IO_AppData.HkTlm));
     CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
-                   TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), TRUE);
+                   TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), true);
 
     /* Creates data buffers for storing data from trick */
     //TODO these buffers need to be cleaned up with free() -JWP
@@ -635,7 +635,7 @@ int32 TVS_IO_InitApp()
 {
     int32 iStatus = CFE_SUCCESS;
 
-    g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_RUN;
+    g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_RUN;
 
     /* Register TVSIO with cfe executive services */
     iStatus = CFE_ES_RegisterApp();
@@ -687,7 +687,7 @@ int32 TVS_IO_InitApp()
 TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
     {
-        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_INFORMATION,
+        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION,
                           "TVS_IO - Application initialized");
     }
     else
@@ -817,7 +817,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
                 break;
 
             default:
-                CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
+                CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
                                   "TVS_IO - Recvd invalid SCH msgId (0x%08X)", MsgId);
                 TVS_IO_ProcessNewData();
         }
@@ -831,9 +831,9 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
         /* This is an example of exiting on an error.
         ** Note that a SB read error is not always going to result in an app quitting.
         */
-        CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_ERROR,
+        CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_EventType_ERROR,
 			  "TVS_IO: SB pipe read error (0x%08X), app will exit", iStatus);
-        g_TVS_IO_AppData.uiRunStatus= CFE_ES_APP_ERROR;
+        g_TVS_IO_AppData.uiRunStatus= CFE_ES_RunStatus_APP_ERROR;
     }
 
     return (iStatus);
@@ -902,7 +902,7 @@ void TVS_IO_ProcessNewData()
                 **         break;
                 */
                 default:
-                    CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
+                    CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
                                       "TVS_IO - Recvd invalid TLM msgId (0x%08X)", TlmMsgId);
                     break;
             }
@@ -913,9 +913,9 @@ void TVS_IO_ProcessNewData()
         }
         else
         {
-            CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_ERROR,
+            CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_EventType_ERROR,
                   "TVS_IO: CMD pipe read error (0x%08X)", iStatus);
-            g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_ERROR;
+            g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_ERROR;
             break;
         }
     }
@@ -995,7 +995,7 @@ void TVS_IO_ProcessNewCmds()
                 */
 
                 default:
-                    CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
+                    CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
                                       "TVS_IO - Recvd invalid CMD msgId (0x%08X)", CmdMsgId);
                     break;
             }
@@ -1006,9 +1006,9 @@ void TVS_IO_ProcessNewCmds()
         }
         else
         {
-            CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_ERROR,
+            CFE_EVS_SendEvent(TVS_IO_PIPE_ERR_EID, CFE_EVS_EventType_ERROR,
                   "TVS_IO: CMD pipe read error (0x%08X)", iStatus);
-            g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_ERROR;
+            g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_ERROR;
             break;
         }
     }
@@ -1065,14 +1065,14 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
         {
             case TVS_IO_NOOP_CC:
                 g_TVS_IO_AppData.HkTlm.usCmdCnt++;
-                CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_INFORMATION,
+                CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_EventType_INFORMATION,
                                   "TVS_IO - Recvd NOOP cmd (%d)", uiCmdCode);
                 break;
 
             case TVS_IO_RESET_CC:
                 g_TVS_IO_AppData.HkTlm.usCmdCnt = 0;
                 g_TVS_IO_AppData.HkTlm.usCmdErrCnt = 0;
-                CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_INFORMATION,
+                CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_EventType_INFORMATION,
                                   "TVS_IO - Recvd RESET cmd (%d)", uiCmdCode);
                 break;
 
@@ -1080,7 +1080,7 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
 
             default:
                 g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;
-                CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
+                CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
                                   "TVS_IO - Recvd invalid cmdId (%d)", uiCmdCode);
                 break;
         }
@@ -1185,7 +1185,7 @@ void TVS_IO_SendOutData()
 **    uint16         usExpLength - expected command length
 **
 ** Returns:
-**    boolean bResult - result of verification
+**    bool bResult - result of verification
 **
 ** Routines Called:
 **    TBD
@@ -1214,10 +1214,10 @@ void TVS_IO_SendOutData()
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
-boolean TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
+bool TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
                            uint16 usExpectedLen)
 {
-    boolean bResult=FALSE;
+    bool bResult=false;
     uint16  usMsgLen=0;
 
     if (MsgPtr != NULL)
@@ -1229,7 +1229,7 @@ boolean TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
             CFE_SB_MsgId_t MsgId = CFE_SB_GetMsgId(MsgPtr);
             uint16 usCmdCode = CFE_SB_GetCmdCode(MsgPtr);
 
-            CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_ERROR,
+            CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
                               "msgLen=%d, expectedLen=%d",
                               MsgId, usCmdCode, usMsgLen, usExpectedLen);
@@ -1297,7 +1297,7 @@ void TVS_IO_AppMain()
     /* This will spawn a child task which will handle reading from trick */
     if (TVS_IO_InitApp() != CFE_SUCCESS)
     {
-        g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_ERROR;
+        g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_ERROR;
     } else {
         /* Do not perform performance monitoring on startup sync */
         CFE_ES_PerfLogExit(TVS_IO_MAIN_TASK_PERF_ID);
@@ -1311,7 +1311,7 @@ void TVS_IO_AppMain()
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings; // local convenience pointer
 
     /* Application main loop */
-    while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
+    while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
     {
         OS_TaskDelay(100);
 

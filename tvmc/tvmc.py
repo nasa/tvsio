@@ -34,9 +34,7 @@ class TvsIoCodeGenerator:
     def GenerateHeaderFileData(self):
 
         magicCode = "#ifndef __TVS_IO_GENERATED_H__\n#define __TVS_IO_GENERATED_H__\n\n"
-        magicCode += "#include <stdint.h>\n\n"
-        magicCode += "#include \"cfe_sb.h\"\n\n"
-        magicCode += "#include \"tvs_io_private_types.h\"\n\n"
+        magicCode += "#include \"tvs_io_private_types.h\"\n"
 
         # Add mapping includes, but only once each
         includedDict = {}
@@ -44,6 +42,9 @@ class TvsIoCodeGenerator:
             if mapping.CfsStructureFilename not in includedDict:
                 magicCode += mapping.EmitIncludeMessages()
                 includedDict[mapping.CfsStructureFilename] = 1
+
+        magicCode += "#include \"cfe_sb.h\"\n\n"
+        magicCode += "#include <stdint.h>\n"
 
         magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
@@ -61,15 +62,15 @@ class TvsIoCodeGenerator:
             if mapping.FlowDirection & 2:
                 magicCode += mapping.EmitPackDeclaration() + "\n"
 
-        magicCode += "#endif // __TVS_IO_GENERATED_H__"
+        magicCode += "\n#endif // __TVS_IO_GENERATED_H__"
 
         return magicCode
     
     def GenerateSourceFileData(self):
 
-        magicCode = "#include <string.h>\n\n"
-        magicCode += "#include \"tvs_io_generated.h\"\n"
+        magicCode = "#include \"tvs_io_generated.h\"\n"
         magicCode += "#include \"tvs_io_utils.h\"\n\n"
+        magicCode += "#include <string.h>\n\n"
 
         for mapping in self.Mappings:
 
@@ -376,7 +377,7 @@ def main():
 
     generator = TvsIoCodeGenerator()
 
-    characterArrayRegex = re.compile("char\[([0-9]+)\]")
+    characterArrayRegex = re.compile(r"char\[([0-9]+)\]")
 
     tvm_files = []
     fileObjects = ""
@@ -504,11 +505,15 @@ def main():
 
         generator.AddMapping(mapping)
 
+    fileData = generator.GenerateHeaderFileData()
+
     with open(outputHeaderFilePath, "w") as outputHeaderFile:
-        outputHeaderFile.write(generator.GenerateHeaderFileData())
+        outputHeaderFile.write(fileData)
+
+    fileData = generator.GenerateSourceFileData()
 
     with open(outputSourceFilePath, "w") as outputSourceFile:
-        outputSourceFile.write(generator.GenerateSourceFileData())
+        outputSourceFile.write(fileData)
 
 if __name__ == "__main__":
     main()

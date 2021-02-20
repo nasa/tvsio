@@ -8,17 +8,18 @@ set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' directory for CFS mission
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/platform_inc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/types_inc)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/src)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(APP_SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_app.c
     ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c
+    ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c
 )
 
 add_custom_target(
     run_tvmc ALL
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
     COMMENT "Generates code from *.tvm files during tvs_io build"
 )
 
@@ -36,8 +37,8 @@ else()
 endif()
 
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.c ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_generated.h
-    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_SOURCE_DIR}/fsw/src"
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
+    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS 
         ../inc/tvm_files/*.tvm
 )

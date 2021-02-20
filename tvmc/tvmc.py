@@ -228,6 +228,7 @@ class TvsIoMapping:
         return magicCode
 
     def EmitUnpackDefinition(self):
+        emitCurMembLenOnce = []
 
         magicCode = "uint32_t " + self.UnpackFunctionName
         magicCode += "(void *mystruct, void *buffer)\n"
@@ -236,10 +237,9 @@ class TvsIoMapping:
         magicCode += "\n\tchar *data = (char*)buffer;\n\n"
 
         magicCode += "\tuint32 byteOffset = 0;\n"
-        magicCode += "\tint32 currentMemberLength = -1;\n\n"
 
         for member in self.MemberList:
-            magicCode += member.EmitUnpackCode()
+            magicCode += member.EmitUnpackCode(emitCurMembLenOnce)
 
         magicCode += "\treturn byteOffset;\n"
         magicCode += "}\n"
@@ -283,9 +283,14 @@ class TvsIoByteArray(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("'%s'")
 
-    def EmitUnpackCode(self):
+    def EmitUnpackCode(self, emitCurMembLenOnce):
+        magicCode = ""
 
-        magicCode = "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"        
+        if len(emitCurMembLenOnce) == 0:
+            magicCode += "\tint32 currentMemberLength = -1;\n\n"
+            emitCurMembLenOnce.append("emitted")
+
+        magicCode += "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"        
         magicCode += "\tmemcpy(mystructptr->" + self.CfsFieldName
         magicCode += ", &data[byteOffset + 8], currentMemberLength);\n"
         magicCode += "\tbyteOffset += 8 + currentMemberLength;\n\n"
@@ -309,9 +314,14 @@ class TvsIoInt(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf(self.PackCodeFormatSpecifier)
 
-    def EmitUnpackCode(self):
+    def EmitUnpackCode(self, emitCurMembLenOnce):
+        magicCode = ""
 
-        magicCode = "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"
+        if len(emitCurMembLenOnce) == 0:
+            magicCode += "\tint32 currentMemberLength = -1;\n\n"
+            emitCurMembLenOnce.append("emitted")
+
+        magicCode += "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"
         magicCode += "\tmystructptr->" + self.CfsFieldName + " = TVS_Unpack"
         magicCode += "Signed" if self.Signed else "Unsigned"
         magicCode += "Integer( &data[byteOffset + 8], currentMemberLength );\n"
@@ -328,7 +338,7 @@ class TvsIoFloat(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("%f")
 
-    def EmitUnpackCode(self):
+    def EmitUnpackCode(self, ignoreCurMemLen):
 
         magicCode = "\tmystructptr->" + self.CfsFieldName + " = TVS_UnpackFloat( &data[byteOffset + 8] );\n"
         magicCode += "\tbyteOffset += 12;\n\n"
@@ -344,7 +354,7 @@ class TvsIoDouble(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("%f")
 
-    def EmitUnpackCode(self):
+    def EmitUnpackCode(self, ignoreCurMemLen):
 
         magicCode = "\tmystructptr->" + self.CfsFieldName + " = TVS_UnpackDouble( &data[byteOffset + 8] );\n"
         magicCode += "\tbyteOffset += 16;\n\n"

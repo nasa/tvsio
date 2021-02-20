@@ -352,10 +352,23 @@ class TvsIoDouble(TvsIoPrimitiveMapping):
         return magicCode
 
 ####################################################
+############## Supporting Functions ################
+####################################################
+
+def printError(msg):
+    print("\n\033[91m*** TVMC Error ***\033[0m " + msg + "\n")
+
+def printWarning(msg):
+    print("\n\033[93m*** TVMC Warning ***\033[0m " + msg + "\n")
+
+
+####################################################
 ################# Begin App Code ###################
 ####################################################
 
 def main():
+
+    encounteredError = False
 
     parser = argparse.ArgumentParser(description='TVM Compiler for TVS_IO App.')
     parser.add_argument('-o', '--output', help='Output directory for TVS_IO generated code files.')
@@ -367,7 +380,7 @@ def main():
     if (args.output):
         outputDirectory = os.path.abspath(args.output)
         if not os.path.exists(outputDirectory):
-            print("Output file path '" + outputDirectory + "' does not exist.")
+            printError("Output file path '" + outputDirectory + "' does not exist.")
             return 
     else:
         outputDirectory = os.path.abspath(".")
@@ -393,7 +406,7 @@ def main():
             try:
                 fileNames = os.listdir(basePath)
             except Exception:
-                print("\n\nDir '{0}' does not exist\n".format(filePath))
+                printWarning("Dir '{0}' does not exist".format(filePath))
                 fileNames = []
 
             for fileName in fileNames:
@@ -404,7 +417,8 @@ def main():
             tvm_files.append(filePath)
 
     if len(tvm_files) == 0:
-        print("\n\n *** TVMC WARNING: No TVM file paths specified *** \n\n")
+        printError("No TVM file paths specified")
+        encounteredError = True
 
     # # process the tvm files
     for tvmFilePath in tvm_files:
@@ -417,7 +431,8 @@ def main():
         try:
             fileObjects = json.loads(tvmJsonString)
         except ValueError as err:
-            print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
+            printError("Parsing file '{0}': {1}".format(tvmFilePath, err))
+            encounteredError = True
             continue
         
         if isinstance(fileObjects, list):
@@ -434,11 +449,13 @@ def main():
             members = tvmObject['members']
             flowDirection = tvmObject['flowDirection']
         except KeyError as err:
-            print("\n\nTVMC Error: missing required parameter '{0}' in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
+            printError("Missing required parameter '{0}' in tvm file: {1}".format(err.args[0], tvmFilePath))
+            encounteredError = True
             continue
 
         if flowDirection < 1 or flowDirection > 3:
-            print("\n\nTVMC Error: flowDirection in tvm file '{0}' must have a value of 1, 2, or 3!\n\n", tvmFilePath)
+            printError("flowDirection in tvm file '{0}' must have a value of 1, 2, or 3".format(tvmFilePath))
+            encounteredError = True
             continue
 
         commandCode = None
@@ -461,7 +478,8 @@ def main():
                 cfsVar = members[x]['cfsVar']
                 cfsType = members[x]['cfsType']
             except KeyError as err:
-                print("\n\nTVMC Error: missing '{0}' parameter in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
+                printError("missing '{0}' parameter in tvm file: {1}".format(err.args[0], tvmFilePath))
+                encounteredError = True
                 continue
                 
             if trickType.startswith("char"):
@@ -515,6 +533,11 @@ def main():
     with open(outputSourceFilePath, "w") as outputSourceFile:
         outputSourceFile.write(fileData)
 
+    if(encounteredError):
+        return -1
+    else:
+        return 0
+
 if __name__ == "__main__":
-    main()
+    exit(main())
 

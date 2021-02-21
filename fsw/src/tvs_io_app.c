@@ -27,6 +27,7 @@
 **   Date | Author | Description
 **   ---------------------------
 **   2018-03-08 | Nexsys | Build #: Code Started
+**   2020-12-XX | Nexsys | Multi-sim support capability added
 **
 **=====================================================================================*/
 
@@ -48,6 +49,7 @@
 
 #include "cfe_platform_cfg.h"
 
+#include "stdio.h"
 /*
 ** Local Defines
 */
@@ -75,38 +77,46 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 
 int32 InitConnectionInfo()
 {
-    memset(&g_TVS_IO_AppData.serv_addr, '0', sizeof(struct sockaddr_in));
+    /* Initialize trick variable server socket connections */
+    //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
+    g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
+    memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
-    g_TVS_IO_AppData.serv_addr.sin_family = AF_INET;
-    g_TVS_IO_AppData.serv_addr.sin_port = htons(TVS_SERVER_PORT);
-
-    if (inet_pton(AF_INET, TVS_SERVER_IP_ADDRESS, &g_TVS_IO_AppData.serv_addr.sin_addr) <= 0)
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        OS_printf("\ninet_pton error occured!\n");
-        return -1;
-    }
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_family = AF_INET;
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(TVS_SERVER_PORTS[conn]);
 
+        if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
+        {
+            OS_printf("\ninet_pton error occured initializing connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
+        }
+    }
     return 1;
 }
 
+//TODO should probably find a way to avoid continuously opening sockets in the case of multiple sim connections with sim not running yet -JWP
 int32 ConnectToTrickVariableServer()
 {
-    OS_printf("TVS_IO: Attempting to connect to TVS at %s:%d...\n", TVS_SERVER_IP_ADDRESS, TVS_SERVER_PORT);
-
-    if ((g_TVS_IO_AppData.socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        OS_printf("TVS_IO: Error creating TVS_IO socket.\n");
-        return -1;
+        OS_printf("TVS_IO: Attempting to connect to TVS connection %d - %s:%d\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+
+        if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        {
+            OS_printf("TVS_IO: Error creating TVS connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
+        }
+
+        if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
+        {
+            OS_printf("TVS_IO: Error: Connect to TVS %d - %s:%d Failed with error: %s\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn], strerror(errno));
+            return -1;
+        }
+
+        OS_printf("TVS_IO: Connection to TVS %d - %s:%d successful!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
     }
-
-    if (connect(g_TVS_IO_AppData.socket, (struct sockaddr *)&g_TVS_IO_AppData.serv_addr, sizeof(struct sockaddr_in)) < 0)
-    {
-        OS_printf("TVS_IO: Error: Connect Failed: %s\n", strerror(errno));
-        return -1;
-    }
-
-    OS_printf("TVS_IO: Connection to TVS successful!\n");
-
     return 1;
 }
 
@@ -114,10 +124,13 @@ int32 SendInitMessages()
 {
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    SendTvsCommand(TVS_PAUSE_CMD);
-    SendTvsCommand(TVS_SET_BINARY_NO_NAMES);
-    SendTvsCommand(TVS_SET_COPY_MODE_CMD);
-    SendTvsCommand(TVS_SET_WRITE_MODE_CMD);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        SendTvsMessage(conn, TVS_PAUSE_CMD);
+        SendTvsMessage(conn, TVS_SET_BINARY_NO_NAMES);
+        SendTvsMessage(conn, TVS_SET_COPY_MODE_CMD);
+        SendTvsMessage(conn, TVS_SET_WRITE_MODE_CMD);
+    }
 
     // send out application-specific init messages...
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
@@ -128,89 +141,105 @@ int32 SendInitMessages()
 
             for (int j = 0; j < mappings[i].memberCount; ++j)
             {
-                write(g_TVS_IO_AppData.socket, initMessages[j], strlen(initMessages[j])); 
+                SendTvsMessage(mappings[i].connectionIndex, initMessages[j]);
             }
         }
     }
 
-    SendTvsCommand(TVS_UNPAUSE_CMD);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        SendTvsMessage(conn, TVS_UNPAUSE_CMD);
+    }
 
     return 1;
 }
 
 int32 TryReadMessage()
 {
-    g_TVS_IO_AppData.frameDataBufferLength = 0;
-
-    uint32 vars_received = 0;
-
-    while (vars_received < TVS_IO_TOTAL_VAR_COUNT)
-    {
-        int headerLength = 0;
-        char buffer[8192];
-
-        while (headerLength < 12)
+    /* Because it is possible for trick to send multiple messages for large buffers, 
+       we loop and count the number of vars received for each connection to make sure we get it all. */
+    uint32 vars_received; 
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
+        vars_received = 0; 
+        g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength = 0;
+        while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
         {
-            int bytesRead = read(g_TVS_IO_AppData.socket, buffer + headerLength, 12 - headerLength);
+            int headerLength = 0;
+            //TODO shouldn't we allocate this outside of the loop, and just clear the buffer? -JWP
+            char buffer[8192]; // Max message size trick will send
 
-            if (bytesRead <= 0)
+            // Read the 12 byte header from the socket
+            while (headerLength < 12)
             {
-                close(g_TVS_IO_AppData.socket);
-                return -1;
+                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
+                if (bytesRead <= 0)
+                {
+                    close(g_TVS_IO_AppData.servers[conn].socket);
+                    //TODO add a warning message here -JWP
+                    return -1;
+                }
+                else
+                {
+                    headerLength += bytesRead;
+                }
             }
-            else
-            {
-                headerLength += bytesRead;
-            }
-        }
 
-        int message_indicator = -1, message_size = -1, n_vars = -1;
+            int message_indicator = -1, message_size = -1, n_vars = -1;
 
-        memcpy(&message_indicator, &buffer[0], 4);
-        memcpy(&message_size, &buffer[4], 4);
-        memcpy(&n_vars, &buffer[8], 4);
+            /* Get useful info from the header */
+            memcpy(&message_indicator, &buffer[0], 4);
+            memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
+            memcpy(&n_vars, &buffer[8], 4);
         
-        vars_received += n_vars;
+            vars_received += n_vars;
 
-        message_size -= 8; // chop off the header bytes from msg size
+            message_size -= 8; // chop off the header bytes from msg size
 
-        int payloadBytesRead = 0;
+            int payloadBytesRead = 0;
 
-        // read payload into buffer
-        while (payloadBytesRead < message_size)
-        {
-            int bytesRead = read(g_TVS_IO_AppData.socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
-
-            if (bytesRead <= 0)
+            // read payload into buffer
+            while (payloadBytesRead < message_size)
             {
-                close(g_TVS_IO_AppData.socket);
-                return -1;
+                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
+
+                if (bytesRead <= 0)
+                {
+                    close(g_TVS_IO_AppData.servers[conn].socket);
+                    //TODO add a warning message here -JWP
+                    return -1;
+                }
+                else
+                {
+                    payloadBytesRead += bytesRead;
+                }
             }
-            else
-            {
-                payloadBytesRead += bytesRead;
-            }
+
+            // copy data from read buffer into frame data buffer
+            memcpy(g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer + g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength,
+                    buffer, payloadBytesRead);
+
+            g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength += payloadBytesRead;
         }
-
-        // copy data from read buffer into frame data buffer
-        memcpy(g_TVS_IO_AppData.frameDataBuffer + g_TVS_IO_AppData.frameDataBufferLength,
-                buffer, payloadBytesRead);
-
-        g_TVS_IO_AppData.frameDataBufferLength += payloadBytesRead;
     }
 
     // process the frame data one mapping at a time
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    uint32_t byteOffset = 0;
+    uint32_t byteOffsets[TVS_NUM_SIM_CONN];
+    for(int i =0; i <TVS_NUM_SIM_CONN; ++i) {
+        byteOffsets[i] = 0;
+    }
+    uint8_t connIdx = 0; // shorthand convenience variable
 
+    /* Process the data from trick by placing into the MIDs and sending on the SB for other apps to pick up */
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
     {
         if (mappings[i].flowDirection & TrickToCfs)
         {
+            connIdx = mappings[i].connectionIndex;
             void *unpackedDataBuffer = mappings[i].unpackedDataBuffer;
 
-            byteOffset += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffer + byteOffset);
+            byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
             CFE_SB_TimeStampMsg((CFE_SB_Msg_t *) mappings[i].unpackedDataBuffer);
             CFE_SB_SendMsg((CFE_SB_Msg_t*)mappings[i].unpackedDataBuffer);
@@ -220,21 +249,23 @@ int32 TryReadMessage()
     return 1;
 }
 
-int32 SendTvsCommand(char *commandString)
+/* Sends a message to trick */
+int32 SendTvsMessage(int conn, char *commandString)
 {
     // TODO: error checking... broken connections, etc.
-
-    write(g_TVS_IO_AppData.socket, commandString, strlen(commandString));
-
+    write(g_TVS_IO_AppData.servers[conn].socket, commandString, strlen(commandString));
     return 1;
 }
 
+/* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
     while(1)
     {
+        /* Tries to read the messages from trick variable server(s) */
         int32 success = TryReadMessage();
 
+        /* Loop and try to connect to trick if we were unable to read*/
         if (success < 0)
         {
             while (ConnectToTrickVariableServer() < 0)
@@ -242,9 +273,11 @@ void ReceiveTaskRun()
                 OS_TaskDelay(3000); // wait a few secs and try again...
             }
 
+            /* Configures the trick variable server connection */
             SendInitMessages();
         }
-    }
+    } //TODO should we have a better while loop condition? -JWP
+      // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
 }
 
 /*=====================================================================================
@@ -466,6 +499,7 @@ int32 TVS_IO_InitPipe()
                                 g_TVS_IO_AppData.trickPipeDepth,
                                 g_TVS_IO_AppData.trickPipeName);
 
+    /* Subscribe to the MIDs we pull data from for sending to trick */
     if (iStatus == CFE_SUCCESS)
     {
         for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
@@ -543,7 +577,12 @@ int32 TVS_IO_InitData()
     CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
                    TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), TRUE);
 
-    g_TVS_IO_AppData.frameDataBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
+    /* Creates data buffers for storing data from trick */
+    //TODO these buffers need to be cleaned up with free() -JWP
+    //TODO Should the buffers be initialized to zero or NULL? -JWP
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
+        g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
+    }
 
     return (iStatus);
 }
@@ -594,10 +633,11 @@ int32 TVS_IO_InitData()
 **=====================================================================================*/
 int32 TVS_IO_InitApp()
 {
-    int32  iStatus=CFE_SUCCESS;
+    int32 iStatus = CFE_SUCCESS;
 
     g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_RUN;
 
+    /* Register TVSIO with cfe executive services */
     iStatus = CFE_ES_RegisterApp();
     if (iStatus != CFE_SUCCESS)
     {
@@ -605,8 +645,10 @@ int32 TVS_IO_InitApp()
         goto TVS_IO_InitApp_Exit_Tag;
     }
 
+    /* Calls generated code to initialize messages and buffers for each mapping in the tvm file(s) */
     TVS_IO_InitGeneratedCode(g_TVS_IO_AppData.mappings);
 
+    /* Lots of initializing */
     if ((TVS_IO_InitEvent() != CFE_SUCCESS) || 
         (TVS_IO_InitPipe() != CFE_SUCCESS) || 
         (TVS_IO_InitData() != CFE_SUCCESS))
@@ -615,13 +657,18 @@ int32 TVS_IO_InitApp()
         goto TVS_IO_InitApp_Exit_Tag;
     }
 
+    /* Initialize socket connection data for trick variable servers */
     InitConnectionInfo();
 
+    /* Create sockets and try to connect once */
+    //TODO I'm not sure why we do this here when we end up doing it again for ReceiveTaskRun() -JWP
+    // can maybe just remove?
     if (ConnectToTrickVariableServer() > 0)
     {
         SendInitMessages();
     }
 
+    /* Create a child task which will connect to trick variable server and continuously read from trick sockets */
     iStatus = CFE_ES_CreateChildTask(&g_TVS_IO_AppData.receiveTaskId,
                                         "TVS_IO_RcvTask",
                                         (CFE_ES_ChildTaskMainFuncPtr_t)&ReceiveTaskRun,
@@ -691,7 +738,7 @@ TVS_IO_InitApp_Exit_Tag:
 **=====================================================================================*/
 void TVS_IO_CleanupCallback()
 {
-    /* Add code to cleanup memory and other cleanup here */
+    //TODO Add code to cleanup memory and other cleanup here -JWP
 }
     
 /*=====================================================================================
@@ -741,6 +788,7 @@ void TVS_IO_CleanupCallback()
 **=====================================================================================*/
 int32 TVS_IO_RcvMsg(int32 iBlocking)
 {
+    /* NOTE this is not where we receive trick or SB messages to send to trick */
     int32           iStatus=CFE_SUCCESS;
     CFE_SB_Msg_t*   MsgPtr=NULL;
     CFE_SB_MsgId_t  MsgId;
@@ -758,7 +806,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
     {
         MsgId = CFE_SB_GetMsgId(MsgPtr);
         switch (MsgId)
-	{
+        {
             case TVS_IO_WAKEUP_MID:
                 TVS_IO_ProcessNewCmds();
                 TVS_IO_ProcessNewData();
@@ -771,6 +819,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
             default:
                 CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
                                   "TVS_IO - Recvd invalid SCH msgId (0x%08X)", MsgId);
+                TVS_IO_ProcessNewData();
         }
     }
     else if (iStatus == CFE_SB_NO_MESSAGE)
@@ -852,7 +901,6 @@ void TVS_IO_ProcessNewData()
                 **         TVS_IO_ProcessNavData(TlmMsgPtr);
                 **         break;
                 */
-
                 default:
                     CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_ERROR,
                                       "TVS_IO - Recvd invalid TLM msgId (0x%08X)", TlmMsgId);
@@ -1246,6 +1294,7 @@ void TVS_IO_AppMain()
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 
     /* Perform application initializations */
+    /* This will spawn a child task which will handle reading from trick */
     if (TVS_IO_InitApp() != CFE_SUCCESS)
     {
         g_TVS_IO_AppData.uiRunStatus = CFE_ES_APP_ERROR;
@@ -1259,15 +1308,17 @@ void TVS_IO_AppMain()
     int32 iStatus = CFE_SUCCESS;
     CFE_SB_Msg_t *trickCmdMsgPtr = NULL;
 
-    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
+    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings; // local convenience pointer
 
     /* Application main loop */
     while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus) == TRUE)
     {
         OS_TaskDelay(100);
 
+        /* This will handle sending data to trick */
         while(1)
         {
+            /* Get the message from the software bus */
             iStatus = CFE_SB_RcvMsg(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
 
             if (iStatus == CFE_SUCCESS)
@@ -1275,6 +1326,7 @@ void TVS_IO_AppMain()
                 uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
                 uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
 
+                /* If this MID and CC are used for any mappings, pack the message and send it to trick */
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
                 {
                     if ((mappings[i].msgId == mid) && (mappings[i].flowDirection & CfsToTrick))
@@ -1288,9 +1340,9 @@ void TVS_IO_AppMain()
 
                         mappings[i].pack(cmdBuffer, trickCmdMsgPtr);
 
-                        for (int j = 0; j < mappings[i].memberCount; ++j)
-                            SendTvsCommand(cmdBuffer[j]);
-
+                        for (int j = 0; j < mappings[i].memberCount; ++j) {
+                            SendTvsMessage(mappings[i].connectionIndex, cmdBuffer[j]);
+                        }
                         break;
                     }
                 }
@@ -1317,4 +1369,3 @@ void TVS_IO_AppMain()
 /*=======================================================================================
 ** End of file tvs_io_app.c
 **=====================================================================================*/
-    

@@ -96,16 +96,16 @@ typedef struct
 
     /* TODO:  Add declarations for additional private data here */
 
-    int32 socket;
-    struct sockaddr_in serv_addr;
+    //NOTE this can also be declared a static array at compile time since user should have set TVS_NUM_SIM_CONN, similarly to frameDataBuffers below
+    //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // TODO Decide which is the best approach -JWP
+    TVS_IO_TrickServer_t * servers;
 
     uint32 receiveTaskId;
 
     TVS_IO_Mapping mappings[TVS_IO_MAPPING_COUNT];
 
     // this buffer is designed to hold an entire frame's worth of data for processing
-    char *frameDataBuffer;
-    uint32 frameDataBufferLength;
+    TVS_IO_FrameDataBuffer_t frameDataBuffers[TVS_NUM_SIM_CONN];
 
 } TVS_IO_AppData_t;
 
@@ -132,19 +132,19 @@ int32 InitConnectionInfo();
 int32 ConnectToTrickVariableServer();
 int32 SendInitMessages();
 int32 TryReadMessage();
-int32 SendCommand(CFE_SB_Msg_t *msg);
-void ReceiveTaskRun();
+int32 SendTvsMessage(int conn, char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
+void  ReceiveTaskRun();
 
-int32  TVS_IO_InitApp(void);
-int32  TVS_IO_InitEvent(void);
-int32  TVS_IO_InitData(void);
-int32  TVS_IO_InitPipe(void);
+int32 TVS_IO_InitApp(void);
+int32 TVS_IO_InitEvent(void);
+int32 TVS_IO_InitData(void);
+int32 TVS_IO_InitPipe(void);
 
 void  TVS_IO_AppMain(void);
 
 void  TVS_IO_CleanupCallback(void);
 
-int32  TVS_IO_RcvMsg(int32 iBlocking);
+int32 TVS_IO_RcvMsg(int32 iBlocking);
 
 void  TVS_IO_ProcessNewData(void);
 void  TVS_IO_ProcessNewCmds(void);

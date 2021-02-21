@@ -28,6 +28,7 @@
 ** Include Files
 */
 #include <stdint.h>
+#include <netinet/in.h>
 
 #include "cfe.h"
 
@@ -52,6 +53,7 @@ typedef struct
     uint8 packetType; // 0 for tlm, 1 for cmd
     uint32 commandCode;
 
+    uint8 connectionIndex;
     uint8 flowDirection;
     uint32 msgId;
     int32 unpackedSize;
@@ -85,6 +87,18 @@ typedef struct
     uint8   ucTlmHeader[CFE_SB_TLM_HDR_SIZE];
     uint32  uiCounter;
 } TVS_IO_OutData_t;
+
+typedef struct
+{
+    int32 socket;
+    struct sockaddr_in serv_addr;
+} TVS_IO_TrickServer_t;
+
+typedef struct
+{
+    char *frameBuffer;
+    uint32 frameBufferLength;
+} TVS_IO_FrameDataBuffer_t;
 
 /* TODO:  Add more private structure definitions here, if necessary. */
 

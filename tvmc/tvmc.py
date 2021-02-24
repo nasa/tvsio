@@ -169,6 +169,11 @@ class TvsIoMapping:
         self.PackFunctionName = "TVS_Pack_" + self.MsgIdString
         self.UnpackFunctionName = "TVS_Unpack_" + self.MsgIdString
 
+        # Message structure depends on command code
+        if not self.IsTelemetry:
+            self.PackFunctionName += "_{}".format(commandCode)
+            self.UnpackFunctionName += "_{}".format(commandCode)
+
     def MemberCount(self):
 
         return len(self.MemberList)

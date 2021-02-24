@@ -158,9 +158,7 @@ class TvsIoMapping:
         self.CommandCode = 0 if commandCode is None else commandCode
         self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
 
-        self.IsTelemetry = True
-        if ((self.MsgId & int('0x1000', 16)) >> 12 == 1):
-            self.IsTelemetry = False
+        self.IsTelemetry = commandCode is None
 
         self.StructureName = structureName
         self.MemberList = []

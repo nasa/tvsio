@@ -106,7 +106,7 @@ class TvsIoCodeGenerator:
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
                     
                     magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
-                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), TRUE);\n\n"
+                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), 1);\n\n"
 
                     if not mapping.IsTelemetry:
                         magicCode += "\tCFE_SB_SetCmdCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"

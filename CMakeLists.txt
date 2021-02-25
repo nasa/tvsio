@@ -20,7 +20,7 @@ set(APP_SRC_FILES
 add_custom_target(
     run_tvmc ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h mybogusfile.h
-    COMMENT "Generates code from *.tvm files during tvs_io build"
+    COMMENT "Generate code from *.tvm files during tvs_io build"
 )
 
 set(TVM_FILE_DIR_ARG $ENV{TVM_FILE_DIR})

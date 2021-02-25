@@ -106,7 +106,7 @@ class TvsIoCodeGenerator:
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
                     
                     magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
-                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), TRUE);\n\n"
+                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), 1);\n\n"
 
                     if not mapping.IsTelemetry:
                         magicCode += "\tCFE_SB_SetCmdCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
@@ -158,18 +158,20 @@ class TvsIoMapping:
         self.CommandCode = 0 if commandCode is None else commandCode
         self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
 
-        self.IsTelemetry = True
-        if ((self.MsgId & int('0x1000', 16)) >> 12 == 1):
-            self.IsTelemetry = False
+        self.IsTelemetry = commandCode is None
 
         self.StructureName = structureName
         self.MemberList = []
-        self.MemberCountMacro = "TVS_" + structureName.upper() + "_MEMBER_COUNT"
+        self.MapId = self.MsgIdString
+        # Message structure depends on command code
+        if not self.IsTelemetry:
+            self.MapId += "_{}".format(commandCode)
+        self.MemberCountMacro = "TVS_" + self.MapId.upper() + "_MEMBER_COUNT"
         self.CfsStructureFilename = structureFilename
-        self.InitMessagesMemberName = "TVS_" + self.StructureName + "_Init_Msgs"
+        self.InitMessagesMemberName = "TVS_" + self.MapId + "_Init_Msgs"
 
-        self.PackFunctionName = "TVS_Pack_" + self.MsgIdString
-        self.UnpackFunctionName = "TVS_Unpack_" + self.MsgIdString
+        self.PackFunctionName = "TVS_Pack_" + self.MapId
+        self.UnpackFunctionName = "TVS_Unpack_" + self.MapId
 
     def MemberCount(self):
 
@@ -478,6 +480,9 @@ def main():
 
         nMembers = len(members)
 
+        if not members:
+            printWarning("No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
+
         mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
 
         for x in range(0, nMembers):
@@ -530,6 +535,9 @@ def main():
             elif trickType == "uint":
 
                 mapping.MemberList.append(TvsIoInt(trickVar, cfsVar, x, False))
+
+            else:
+                raise ValueError("Unknown Trick type {} in type {} defined in {}".format(trickType, cfsStructureType, tvmFilePath))
 
         generator.AddMapping(mapping)
 

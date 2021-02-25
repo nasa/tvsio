@@ -537,6 +537,9 @@ def main():
 
                 mapping.MemberList.append(TvsIoInt(trickVar, cfsVar, x, False))
 
+            else:
+                raise ValueError("Unknown Trick type {} in type {} defined in {}".format(trickType, cfsStructureType, tvmFilePath))
+
         generator.AddMapping(mapping)
 
     fileData = generator.GenerateHeaderFileData()

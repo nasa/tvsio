@@ -1,7 +1,16 @@
-cmake_minimum_required(VERSION 2.6.4)
+cmake_minimum_required(VERSION 3.13)
 project(CFE_TVS_IO_APP C)
+cmake_policy(SET CMP0077 NEW)
 
 find_package( PythonInterp 2.7 REQUIRED )
+
+string(
+    CONCAT
+    TVS_IO_PER_TARGET_CONFIG_DOC
+    "Look for TVM files in target-specific directories; see "
+    "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
+)
+option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
 set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
@@ -32,7 +41,11 @@ if (NOT DEFINED TVM_FILE_DIR_ARG)
 else()
 
     get_filename_component(TVS_IO_TVM_FILE_DIR ${TVM_FILE_DIR_ARG} ABSOLUTE)
-    set(TVS_IO_TVM_FILE_DIR "${TVS_IO_TVM_FILE_DIR}/*")
+    if(TVS_IO_PER_TARGET_CONFIG)
+        set(TVS_IO_TVM_FILE_DIR "${TVS_IO_TVM_FILE_DIR}/${INSTALL_TARGET_LIST}/*")
+    else()
+        set(TVS_IO_TVM_FILE_DIR "${TVS_IO_TVM_FILE_DIR}/*")
+    endif()
 
 endif()
 

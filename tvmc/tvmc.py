@@ -162,17 +162,16 @@ class TvsIoMapping:
 
         self.StructureName = structureName
         self.MemberList = []
-        self.MemberCountMacro = "TVS_" + structureName.upper() + "_MEMBER_COUNT"
-        self.CfsStructureFilename = structureFilename
-        self.InitMessagesMemberName = "TVS_" + self.StructureName + "_Init_Msgs"
-
-        self.PackFunctionName = "TVS_Pack_" + self.MsgIdString
-        self.UnpackFunctionName = "TVS_Unpack_" + self.MsgIdString
-
+        self.MapId = self.MsgIdString
         # Message structure depends on command code
         if not self.IsTelemetry:
-            self.PackFunctionName += "_{}".format(commandCode)
-            self.UnpackFunctionName += "_{}".format(commandCode)
+            self.MapId += "_{}".format(commandCode)
+        self.MemberCountMacro = "TVS_" + self.MapId.upper() + "_MEMBER_COUNT"
+        self.CfsStructureFilename = structureFilename
+        self.InitMessagesMemberName = "TVS_" + self.MapId + "_Init_Msgs"
+
+        self.PackFunctionName = "TVS_Pack_" + self.MapId
+        self.UnpackFunctionName = "TVS_Unpack_" + self.MapId
 
     def MemberCount(self):
 

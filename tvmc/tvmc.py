@@ -481,6 +481,9 @@ def main():
 
         nMembers = len(members)
 
+        if not members:
+            printWarning("No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
+
         mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
 
         for x in range(0, nMembers):

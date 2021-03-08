@@ -225,6 +225,7 @@ int32 TryReadMessage()
 {
     /* Because it is possible for trick to send multiple messages for large buffers, 
        we loop and count the number of vars received for each connection to make sure we get it all. */
+    int32  Status;
     uint32 vars_received; 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
         vars_received = 0; 
@@ -310,8 +311,8 @@ int32 TryReadMessage()
 
             byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
-            CFE_SB_TimeStampMsg((CFE_SB_Msg_t *) mappings[i].unpackedDataBuffer);
-            CFE_SB_SendMsg((CFE_SB_Msg_t*)mappings[i].unpackedDataBuffer);
+            CFE_SB_TimeStampMsg((CFE_MSG_Message_t *) mappings[i].unpackedDataBuffer);
+            Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
         }
     }
 
@@ -603,7 +604,7 @@ TVS_IO_InitPipe_Exit_Tag:
 **    int32 iStatus - Status of initialization
 **
 ** Routines Called:
-**    CFE_SB_InitMsg
+**    CFE_MSG_Init
 **
 ** Called By:
 **    TVS_IO_InitApp
@@ -640,13 +641,13 @@ int32 TVS_IO_InitData()
 
     /* Init output data */
     memset((void*)&g_TVS_IO_AppData.OutData, 0x00, sizeof(g_TVS_IO_AppData.OutData));
-    CFE_SB_InitMsg(&g_TVS_IO_AppData.OutData,
-                   TVS_IO_OUT_DATA_MID, sizeof(g_TVS_IO_AppData.OutData), true);
+    iStatus = CFE_MSG_Init((CFE_MSG_Message_t *)&g_TVS_IO_AppData.OutData,
+                   TVS_IO_OUT_DATA_MID, sizeof(g_TVS_IO_AppData.OutData) );
 
     /* Init housekeeping packet */
     memset((void*)&g_TVS_IO_AppData.HkTlm, 0x00, sizeof(g_TVS_IO_AppData.HkTlm));
-    CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
-                   TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), true);
+    iStatus = CFE_MSG_Init((CFE_MSG_Message_t *)&g_TVS_IO_AppData.HkTlm,
+                   TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm) );
 
     /* Creates data buffers for storing data from trick */
     //TODO these buffers need to be cleaned up with free() -JWP
@@ -852,21 +853,21 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 {
     /* NOTE this is not where we receive trick or SB messages to send to trick */
     int32           iStatus=CFE_SUCCESS;
-    CFE_SB_Msg_t*   MsgPtr=NULL;
+    CFE_SB_Buffer_t*   MsgPtr=NULL;
     CFE_SB_MsgId_t  MsgId;
 
     /* Stop Performance Log entry */
     CFE_ES_PerfLogExit(TVS_IO_MAIN_TASK_PERF_ID);
 
     /* Wait for WakeUp messages from scheduler */
-    iStatus = CFE_SB_RcvMsg(&MsgPtr, g_TVS_IO_AppData.SchPipeId, iBlocking);
+    iStatus = CFE_SB_ReceiveBuffer(&MsgPtr, g_TVS_IO_AppData.SchPipeId, iBlocking);
 
     /* Start Performance Log entry */
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 
     if (iStatus == CFE_SUCCESS)
     {
-        MsgId = CFE_SB_GetMsgId(MsgPtr);
+        iStatus = CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
         switch (MsgId)
         {
             case TVS_IO_WAKEUP_MID:
@@ -913,7 +914,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 **    None
 **
 ** Routines Called:
-**    CFE_SB_RcvMsg
+**    CFE_SB_ReceiveBuffer
 **    CFE_SB_GetMsgId
 **    CFE_EVS_SendEvent
 **
@@ -944,16 +945,16 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 void TVS_IO_ProcessNewData()
 {
     int iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t*   TlmMsgPtr=NULL;
+    CFE_SB_Buffer_t*   TlmMsgPtr=NULL;
     CFE_SB_MsgId_t  TlmMsgId;
 
     /* Process telemetry messages till the pipe is empty */
     while (1)
     {
-        iStatus = CFE_SB_RcvMsg(&TlmMsgPtr, g_TVS_IO_AppData.TlmPipeId, CFE_SB_POLL);
+        iStatus = CFE_SB_ReceiveBuffer(&TlmMsgPtr, g_TVS_IO_AppData.TlmPipeId, CFE_SB_POLL);
         if (iStatus == CFE_SUCCESS)
         {
-            TlmMsgId = CFE_SB_GetMsgId(TlmMsgPtr);
+            iStatus = CFE_MSG_GetMsgId( &TlmMsgPtr->Msg, &TlmMsgId );
             switch (TlmMsgId)
             {
                 /* 
@@ -995,7 +996,7 @@ void TVS_IO_ProcessNewData()
 **    None
 **
 ** Routines Called:
-**    CFE_SB_RcvMsg
+**    CFE_SB_ReceiveBuffer
 **    CFE_SB_GetMsgId
 **    CFE_EVS_SendEvent
 **    TVS_IO_ProcessNewAppCmds
@@ -1028,7 +1029,7 @@ void TVS_IO_ProcessNewData()
 void TVS_IO_ProcessNewCmds()
 {
     int iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t*   CmdMsgPtr=NULL;
+    CFE_SB_Buffer_t*   CmdMsgPtr=NULL;
     CFE_SB_MsgId_t  CmdMsgId;
 
     /* Process command messages till the pipe is empty */
@@ -1037,7 +1038,7 @@ void TVS_IO_ProcessNewCmds()
         iStatus = CFE_SB_RcvMsg(&CmdMsgPtr, g_TVS_IO_AppData.CmdPipeId, CFE_SB_POLL);
         if(iStatus == CFE_SUCCESS)
         {
-            CmdMsgId = CFE_SB_GetMsgId(CmdMsgPtr);
+            iStatus = CFE_MSG_GetMsgId(&CmdMsgPtr->Msg, &CmdMsgId);
             switch (CmdMsgId)
             {
                 case TVS_IO_CMD_MID:
@@ -1116,13 +1117,14 @@ void TVS_IO_ProcessNewCmds()
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
-void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
+void TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t* MsgPtr)
 {
-    uint32  uiCmdCode=0;
+    int32              Status;
+    CFE_MSG_FcnCode_t  uiCmdCode=0;
 
     if (MsgPtr != NULL)
     {
-        uiCmdCode = CFE_SB_GetCmdCode(MsgPtr);
+        Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &uiCmdCode);
         switch (uiCmdCode)
         {
             case TVS_IO_NOOP_CC:
@@ -1189,8 +1191,8 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
 **=====================================================================================*/
 void TVS_IO_ReportHousekeeping()
 {
-    CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.HkTlm);
-    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.HkTlm);
+    CFE_SB_TimeStampMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.HkTlm);
+    CFE_SB_TransmitMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.HkTlm, true);
 }
     
 /*=====================================================================================
@@ -1233,8 +1235,8 @@ void TVS_IO_ReportHousekeeping()
 **=====================================================================================*/
 void TVS_IO_SendOutData()
 {
-    CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
-    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
+    CFE_SB_TimeStampMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.OutData);
+    CFE_SB_TransmitMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.OutData, true);
 }
     
 /*=====================================================================================
@@ -1276,20 +1278,23 @@ void TVS_IO_SendOutData()
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
-bool TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
+bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
                            uint16 usExpectedLen)
 {
+    int32   Status;
     bool bResult=false;
-    uint16  usMsgLen=0;
+    CFE_MSG_Size_t    usMsgLen=0;
+    CFE_MSG_FcnCode_t usCmdCode;
+    CFE_SB_MsgId_t    MsgId;
 
     if (MsgPtr != NULL)
     {
-        usMsgLen = CFE_SB_GetTotalMsgLength(MsgPtr);
+        Status = CFE_MSG_GetSize(&MsgPtr->Msg, &usMsgLen);
 
         if (usExpectedLen != usMsgLen)
         {
-            CFE_SB_MsgId_t MsgId = CFE_SB_GetMsgId(MsgPtr);
-            uint16 usCmdCode = CFE_SB_GetCmdCode(MsgPtr);
+            Status = CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
+            Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &usCmdCode);
 
             CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
@@ -1368,7 +1373,9 @@ void TVS_IO_AppMain()
     }
 
     int32 iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t *trickCmdMsgPtr = NULL;
+    CFE_SB_Buffer_t *trickCmdMsgPtr = NULL;
+    CFE_SB_MsgId_t   mid;
+    CFE_MSG_FcnCode_t cmdCode;
 
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings; // local convenience pointer
 
@@ -1381,12 +1388,12 @@ void TVS_IO_AppMain()
         while(1)
         {
             /* Get the message from the software bus */
-            iStatus = CFE_SB_RcvMsg(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
+            iStatus = CFE_SB_ReceiveBuffer(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
 
             if (iStatus == CFE_SUCCESS)
             {
-                uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
-                uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
+                iStatus = CFE_MSG_GetMsgId(&trickCmdMsgPtr->Msg, &mid);
+                iStatus = CFE_MSG_GetFcnCode(&trickCmdMsgPtr->Msg, &cmdCode);
 
                 /* If this MID and CC are used for any mappings, pack the message and send it to trick */
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
@@ -1400,7 +1407,7 @@ void TVS_IO_AppMain()
 
                         char **cmdBuffer = mappings[i].packedCommandBuffer;
 
-                        mappings[i].pack(cmdBuffer, trickCmdMsgPtr);
+                        mappings[i].pack((void **)cmdBuffer, (void *)trickCmdMsgPtr);
 
                         for (int j = 0; j < mappings[i].memberCount; ++j) {
                             SendTvsMessage(mappings[i].connectionIndex, cmdBuffer[j]);

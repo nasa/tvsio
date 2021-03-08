@@ -4,13 +4,13 @@ cmake_policy(SET CMP0077 NEW)
 
 find_package( PythonInterp 2.7 REQUIRED )
 
-string(
-    CONCAT
-    TVS_IO_PER_TARGET_CONFIG_DOC
-    "Look for TVM files in target-specific directories; see "
-    "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
-)
-option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
+# string(
+#     CONCAT
+#     TVS_IO_PER_TARGET_CONFIG_DOC
+#     "Look for TVM files in target-specific directories; see "
+#     "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
+# )
+# option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
 set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
@@ -18,6 +18,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' dir
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/platform_inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/src)
+include_directories($ENV{TVM_FILE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(APP_SRC_FILES

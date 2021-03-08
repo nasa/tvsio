@@ -44,9 +44,9 @@
 */
 typedef struct
 {
-    uint8              TlmHeader[CFE_SB_TLM_HDR_SIZE];
-    uint8              usCmdCnt;
-    uint8              usCmdErrCnt;
+    CFE_MSG_TelemetryHeader_t TlmHeader;
+    uint8                     usCmdCnt;
+    uint8                     usCmdErrCnt;
 
     /* TODO:  Add declarations for additional housekeeping data here */
 

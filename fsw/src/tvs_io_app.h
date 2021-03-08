@@ -149,12 +149,12 @@ int32 TVS_IO_RcvMsg(int32 iBlocking);
 
 void  TVS_IO_ProcessNewData(void);
 void  TVS_IO_ProcessNewCmds(void);
-void  TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t*);
+void  TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t *);
 
 void  TVS_IO_ReportHousekeeping(void);
 void  TVS_IO_SendOutData(void);
 
-bool  TVS_IO_VerifyCmdLength(CFE_SB_Msg_t*, uint16);
+bool  TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t*, uint16);
 
 #endif /* _TVS_IO_APP_H_ */
 

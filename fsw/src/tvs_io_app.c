@@ -38,6 +38,8 @@
 /*
 ** Include Files
 */
+#include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -82,15 +84,60 @@ int32 InitConnectionInfo()
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
     memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
+    char envvar_name[64];
+    const char *envvar_val;
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        g_TVS_IO_AppData.servers[conn].serv_addr.sin_family = AF_INET;
-        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(TVS_SERVER_PORTS[conn]);
-
-        if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
+        snprintf(envvar_name, sizeof(envvar_name), "TVS_%d_PORT", conn);
+        uint16_t port = 0;
+        if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
         {
-            OS_printf("\ninet_pton error occured initializing connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
-            return -1;
+            errno = 0;
+            char *end;
+            unsigned long tmp = strtoul(envvar_val, &end, 10);
+            if (*end)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Warning: ignoring trailing garbage \"%s\" in %s", end, envvar_name);
+            }
+            if (errno)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "Failed to parse %s: %s", envvar_name, strerror(errno));
+            }
+            else if (tmp == 0 || tmp > UINT16_MAX)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s %lu is out of range", envvar_name, tmp);
+            }
+            else
+            {
+                port = tmp;
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Using %s=%" PRIu16, envvar_name, port);
+            }
+        }
+        if (!port)
+        {
+            port = TVS_SERVER_PORTS[conn];
+        }
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_family = AF_INET;
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(port);
+
+        snprintf(envvar_name, sizeof(envvar_name), "TVS_%d_HOST", conn);
+        bool have_host = false;
+        if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
+        {
+            if (inet_pton(AF_INET, envvar_val, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) == 1)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Using %s=%s", envvar_name, envvar_val);
+                have_host = true;
+            }
+        }
+
+        if (!have_host)
+        {
+            if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "inet_pton error occured initializing connection %d - %s:%" PRIu16 "!", conn, TVS_SERVER_IPS[conn], port);
+                return -1;
+            }
         }
     }
     return 1;

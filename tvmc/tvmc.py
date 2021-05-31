@@ -449,11 +449,14 @@ def main():
         
         if isinstance(fileObjects, list):
             for singleTemp in fileObjects:
+                singleTemp[u'tvmFilePath'] = tvmFilePath
                 tvmObjectList.append(singleTemp)
         else:
+            fileObjects[u'tvmFilePath'] = tvmFilePath
             tvmObjectList.append(fileObjects)
 
     for tvmObject in tvmObjectList:
+        tvmFilePath = tvmObject['tvmFilePath']
         try:
             msgId = tvmObject['messageId']
             cfsStructureType = tvmObject['cfsStructureType']

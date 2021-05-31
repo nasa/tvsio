@@ -1,4 +1,5 @@
 .vscode/
 fsw/types_inc/*.h
-fsw/src/tvs_io_generated.c
-fsw/src/tvs_io_generated.h
+tvs_io_generated.c
+tvs_io_generated.h
+*.pyc

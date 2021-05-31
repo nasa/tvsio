@@ -8,22 +8,23 @@ import copy
 
 class TvmLevenshtein:    # TVM parameter Keywords
     """Implementation of Levenstein string distance formula \n
-    For use with parsing 
+    For use with parsing TVM files
     """
 
     # Default TVM parameter Keywords
-    tvmKeywords = { "cfsStructureType",
-                    "cfsStructureFileName",
-                    "messageId",
-                    "members",
-                    "commandCode",
-                    "flowDirection"}
+    tvmKeywords = { u"cfsStructureType",
+                    u"cfsStructureFileName",
+                    u"messageId",
+                    u"members",
+                    u"commandCode",
+                    u"flowDirection",
+                    u"tvmFilePath"}
 
     # Default TVM mapping Keywords
-    tvmMapwords = { "trickVar",             
-                    "trickType",
-                    "cfsVar",
-                    "cfsType"}
+    tvmMapwords = { u"trickVar",             
+                    u"trickType",
+                    u"cfsVar",
+                    u"cfsType"}
 
     def __levenshtein_ratio_and_distance(self, s, t, ratio_calc = False):
         """The actual Levenshtein formula implementation\n
@@ -72,7 +73,7 @@ class TvmLevenshtein:    # TVM parameter Keywords
         ratio = -1
 
         if ratio_calc:
-            ratio = ((len(s) + len(t)) - distRatio[row][col]) / (len(s) + len(t))
+            ratio = ((len(s) + len(t)) - float(distRatio[row][col])) / (len(s) + len(t))
 
         return (distance[row][col], ratio)
 
@@ -150,33 +151,30 @@ class TvmLevenshtein:    # TVM parameter Keywords
             # isn't good enough
             # # minDist  = min(distances, key=(lambda x : x[1]))
 
-            minDists  = [('d', 999, 1.0)]
+            minDists  = [('d', 999, 1.0)]   # defaults that should get replaced on any result
             maxRatios = [('r', 999, 0.0)]
+
             for dist in distances:
                 # grab lowest distance matches with ratios
                 if dist[1] < minDists[0][1]:
-                    minDists.clear()
+                    del minDists[:]
                     minDists.append(dist)
+
                 elif dist[1] == minDists[0][1]:
                     minDists.append(dist)
                 
                 # grab highest ratio matches with distances
                 if dist[2] > maxRatios[0][2]:
-                    maxRatios.clear()
+                    del maxRatios[:]
                     maxRatios.append(dist)
                 elif dist[2] == maxRatios[0][2]:
                     maxRatios.append(dist)
 
             distsAndRatios = list(set().union(minDists,maxRatios))
             return distsAndRatios
-            
 
-            # TODO: More logic to evaluate differences. 
+            # TODO: More logic to evaluate differences?
             # 1. Max distance or minimum ratio?
-            # 2. fix capitalization
-            # fix the element if get a strong Lev result
-            # print(" *** Matched '{0}' with: '{1}'. Levenshtein analysis: Edits: {2:2} Ratio: {3:.3f}".format(key, minDists[0][0], minDist[1], minDist[2]))
-            # return minDists[0]
 
     def fixDict(self, tvmDict, isMapping=False, keywords=None):
         """Evaluate top level item keys against defined keywords 
@@ -200,7 +198,7 @@ class TvmLevenshtein:    # TVM parameter Keywords
 
             checkTups = self.__checkElements(param[0], keywords)
             if len(checkTups) > 0:
-                fixList.append((param[0], checkTups))
+                fixList.append( (param[0], checkTups) )
         
         # process of elimination may help with fixing some elements
         # after some are fixed, try fixing others again
@@ -211,7 +209,7 @@ class TvmLevenshtein:    # TVM parameter Keywords
         while fixed != 0:
             fixed = self.__processFixList(tmpDict, fixList, fixed == -1)
             totalFixed += fixed
-        
+
         return tmpDict
 
     def __processFixList(self, tmpDict, fixList, firstLoop):
@@ -221,23 +219,23 @@ class TvmLevenshtein:    # TVM parameter Keywords
         for param in fixList:
             oldName = param[0]
             possibles = param[1]
-            
-            if(firstLoop): print("\n\n *** TVMC WARNING: Non-standard TVM parameter: '{0}' ***".format(oldName))
-            if len(possibles) == 1:
-                if(firstLoop):
-                    if oldName.lower() == possibles[0][0].lower():
-                        print("\n\tFixed casing to '{0}'\n".format(possibles[0][0]))
-                    else:
-                        print("\n\tMatched '{0}' with: '{1}'. Levenshtein analysis: Edits: {2:2}, Ratio: {3:.3f}\n".format(oldName, possibles[0][0], possibles[0][1], possibles[0][2]))
 
-                tmpDict[param[1][0][0]] = tmpDict.pop(oldName)
+            if firstLoop: printWarning( "Non-standard TVM parameter: '{0}'".format(oldName) )
+
+            if len(possibles) == 1:
+                if firstLoop :
+                    if oldName.lower() == possibles[0][0].lower():
+                        print("\tFixed casing to '{0}'".format(possibles[0][0]))
+                    else:
+                        print("\tMatched '{0}' with: '{1}'\n\t    Levenshtein analysis:\n\t\tEdits: {2}\n\t\tRatio: {3:.3f}".format(oldName, possibles[0][0], possibles[0][1], possibles[0][2]))
+                tmpDict[ param[1][0][0] ] = tmpDict.pop(oldName)
                 fixedList.append(param)
                 continue
             else:
-                if(firstLoop): print("\n\tMultiple results for '{0}'".format(oldName))
+                if firstLoop : print("\tMultiple results for '{0}'".format(oldName))
                 pops = []
                 for item in possibles:
-                    if(firstLoop): print("\t- '{0}' Levenstein Analysis == Edits: {1:2}, Ratio: {2:.3f}".format(item[0], item[1], item[2]) )
+                    if(firstLoop): print("\t- '{0}' Levenstein Analysis:\n\t\tEdits: {1:2}\n\t\tRatio: {2:.3f}".format(item[0], item[1], item[2]) )
                     # see if only one of the possibles doesn't exists. if so, use it
                     
                     if item[0] in tmpDict:
@@ -257,3 +255,9 @@ class TvmLevenshtein:    # TVM parameter Keywords
             fixList.remove(fixed)
 
         return fixedCnt
+
+def printError(msg):
+    print("\n\033[91m*** TVMC Error ***\033[0m " + msg + "\n")
+
+def printWarning(msg):
+    print("\n\033[93m*** TVMC Warning ***\033[0m " + msg + "\n")

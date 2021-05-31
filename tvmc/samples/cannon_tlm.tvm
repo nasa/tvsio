@@ -1,5 +1,5 @@
 {
-    "cfsStructureType":"Struct_Cannon",
+    "cfsStructuretype":"Struct_Cannon",
     "cfsStructureFileName":"CannonStructDef.h",
     "members": [
         {"trickVar":"dyn.cannon.rf.delta_time", "trickType":"float", "cfsVar":"rf.delta_time", "cfsType":"double"},

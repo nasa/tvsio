@@ -464,14 +464,17 @@ def main():
         try:
             # Attempt to fix all top level TVM Parameters
             tvmObject = cleaner.fixDict(tvmObject)
-
+            
             # Now, Attempt to fix each mapping's variable parameters
+            nMember = -1
             for mapping in tvmObject['members']:
-                cleaner.fixDict(mapping, True)
-        except KeyError as err:
-            print("\n\nTVMC Error: missing required parameter '{0}' in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
+                nMember += 1 
+                tvmObject['members'][nMember] = cleaner.fixDict(mapping, True)
+
         except:
-            print("\n\nTVMC Error: Encountered Levenshtein problem in file '{0}'\n".format(tvmFilePath))
+            printError("Encountered Levenshtein problem in file '{0}'. {1}".format(tvmFilePath, err.args))
+            # To run TVMC without using Levenshtein string distance to auto-correct spelling, comment out this try/except block
+            encounteredError = True
             continue
 
         try:
@@ -480,6 +483,7 @@ def main():
             cfsStructureFileName = tvmObject['cfsStructureFileName']
             members = tvmObject['members']
             flowDirection = tvmObject['flowDirection']
+
         except KeyError as err:
             printError("Missing required parameter '{0}' in tvm file: {1}".format(err.args[0], tvmFilePath))
             encounteredError = True
@@ -514,7 +518,7 @@ def main():
                 cfsVar = members[x]['cfsVar']
                 cfsType = members[x]['cfsType']
             except KeyError as err:
-                printError("missing '{0}' parameter in tvm file: {1}".format(err.args[0], tvmFilePath))
+                printError("Missing '{0}' parameter from in:\n\ttvm file:\t\t'{1}'\n\tcfsStructureType:\t'{2}'\n\tMember #:\t\t{3}".format(err.args[0], tvmFilePath, cfsStructureType, x+1))
                 encounteredError = True
                 continue
                 

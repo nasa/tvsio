@@ -82,7 +82,11 @@ int32 InitConnectionInfo()
     /* Initialize trick variable server socket connections */
     //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
-    memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        /* This also zeros the rest of the structure */
+        g_TVS_IO_AppData.servers[i] = (TVS_IO_TrickServer_t){ .socket = -1 };
+    }
 
     char envvar_name[64];
     const char *envvar_val;
@@ -157,11 +161,14 @@ int32 ConnectToTrickVariableServer()
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
             "Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
 
-        if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        if (g_TVS_IO_AppData.servers[conn].socket < 0)
         {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-                "Error creating TVS connection %d - %s:%d!", conn, addr_buff, port);
-            return -1;
+            if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                    "Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
+                return -1;
+            }
         }
 
         if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
@@ -232,6 +239,7 @@ int32 TryReadMessage()
                 if (bytesRead <= 0)
                 {
                     close(g_TVS_IO_AppData.servers[conn].socket);
+                    g_TVS_IO_AppData.servers[conn].socket = -1;
                     //TODO add a warning message here -JWP
                     return -1;
                 }
@@ -262,6 +270,7 @@ int32 TryReadMessage()
                 if (bytesRead <= 0)
                 {
                     close(g_TVS_IO_AppData.servers[conn].socket);
+                    g_TVS_IO_AppData.servers[conn].socket = -1;
                     //TODO add a warning message here -JWP
                     return -1;
                 }

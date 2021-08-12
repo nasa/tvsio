@@ -92,6 +92,7 @@ int32 InitConnectionInfo()
         uint16_t port = 0;
         if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
         {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Found env variable %s, overwriting tvs_io_platform_cfg connection %d", envvar_name, conn);
             errno = 0;
             char *end;
             unsigned long tmp = strtoul(envvar_val, &end, 10);
@@ -124,6 +125,7 @@ int32 InitConnectionInfo()
         bool have_host = false;
         if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
         {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Found env variable %s, overwriting tvs_io_platform_cfg connection %d", envvar_name, conn);
             if (inet_pton(AF_INET, envvar_val, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) == 1)
             {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Using %s=%s", envvar_name, envvar_val);
@@ -146,23 +148,31 @@ int32 InitConnectionInfo()
 //TODO should probably find a way to avoid continuously opening sockets in the case of multiple sim connections with sim not running yet -JWP
 int32 ConnectToTrickVariableServer()
 {
+    char addr_buff[INET_ADDRSTRLEN]; // buffer for message output
+    uint16 port;
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        OS_printf("TVS_IO: Attempting to connect to TVS connection %d - %s:%d\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+        inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
+        port = ntohs(g_TVS_IO_AppData.servers[conn].serv_addr.sin_port);
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+            "Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
 
         if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         {
-            OS_printf("TVS_IO: Error creating TVS connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+                "Error creating TVS connection %d - %s:%d!", conn, addr_buff, port);
             return -1;
         }
 
         if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
         {
-            OS_printf("TVS_IO: Error: Connect to TVS %d - %s:%d Failed with error: %s\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn], strerror(errno));
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+                "Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
             return -1;
         }
 
-        OS_printf("TVS_IO: Connection to TVS %d - %s:%d successful!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+            "Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
     }
     return 1;
 }

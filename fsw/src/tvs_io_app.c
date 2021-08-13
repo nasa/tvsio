@@ -82,7 +82,11 @@ int32 InitConnectionInfo()
     /* Initialize trick variable server socket connections */
     //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
-    memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        /* This also zeros the rest of the structure */
+        g_TVS_IO_AppData.servers[conn] = (TVS_IO_TrickServer_t){ .socket = -1 };
+    }
 
     char envvar_name[64];
     const char *envvar_val;
@@ -145,7 +149,6 @@ int32 InitConnectionInfo()
     return 1;
 }
 
-//TODO should probably find a way to avoid continuously opening sockets in the case of multiple sim connections with sim not running yet -JWP
 int32 ConnectToTrickVariableServer()
 {
     char addr_buff[INET_ADDRSTRLEN]; // buffer for message output
@@ -154,25 +157,32 @@ int32 ConnectToTrickVariableServer()
     {
         inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
         port = ntohs(g_TVS_IO_AppData.servers[conn].serv_addr.sin_port);
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-            "Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
 
-        if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-                "Error creating TVS connection %d - %s:%d!", conn, addr_buff, port);
-            return -1;
-        }
-
-        if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
+        if (g_TVS_IO_AppData.servers[conn].socket < 0)
         {
             CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                "Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
-            return -1;
-        }
+                "TVS_IO - Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
 
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-            "Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
+            if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                    "TVS_IO - Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
+                return -1;
+            }
+
+            // socket is created, try to connect to trick, close the socket if trick sim doesn't connect
+            if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+                    "TVS_IO - Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
+                close(g_TVS_IO_AppData.servers[conn].socket);
+                g_TVS_IO_AppData.servers[conn].socket = -1;
+                return -1;
+            } else {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+                    "TVS_IO - Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
+            }
+        }
     }
     return 1;
 }
@@ -231,8 +241,9 @@ int32 TryReadMessage()
                 int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
                 if (bytesRead <= 0)
                 {
+                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
-                    //TODO add a warning message here -JWP
+                    g_TVS_IO_AppData.servers[conn].socket = -1;
                     return -1;
                 }
                 else
@@ -261,8 +272,9 @@ int32 TryReadMessage()
 
                 if (bytesRead <= 0)
                 {
+                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
-                    //TODO add a warning message here -JWP
+                    g_TVS_IO_AppData.servers[conn].socket = -1;
                     return -1;
                 }
                 else
@@ -317,12 +329,10 @@ int32 SendTvsMessage(int conn, char *commandString)
 /* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
+    int32 success = -1;
     while(1)
     {
-        /* Tries to read the messages from trick variable server(s) */
-        int32 success = TryReadMessage();
-
-        /* Loop and try to connect to trick if we were unable to read*/
+        /* Connect to trick, should only be called the first pass, and if the connection is closed */
         if (success < 0)
         {
             while (ConnectToTrickVariableServer() < 0)
@@ -333,6 +343,10 @@ void ReceiveTaskRun()
             /* Configures the trick variable server connection */
             SendInitMessages();
         }
+
+        /* Tries to read the messages from trick variable server(s) */
+        success = TryReadMessage();
+
     } //TODO should we have a better while loop condition? -JWP
       // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
 }
@@ -717,14 +731,6 @@ int32 TVS_IO_InitApp()
     /* Initialize socket connection data for trick variable servers */
     InitConnectionInfo();
 
-    /* Create sockets and try to connect once */
-    //TODO I'm not sure why we do this here when we end up doing it again for ReceiveTaskRun() -JWP
-    // can maybe just remove?
-    if (ConnectToTrickVariableServer() > 0)
-    {
-        SendInitMessages();
-    }
-
     /* Create a child task which will connect to trick variable server and continuously read from trick sockets */
     iStatus = CFE_ES_CreateChildTask(&g_TVS_IO_AppData.receiveTaskId,
                                         "TVS_IO_RcvTask",
@@ -744,8 +750,7 @@ int32 TVS_IO_InitApp()
 TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
     {
-        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION,
-                          "TVS_IO - Application initialized");
+        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION, "Application initialized");
     }
     else
     {

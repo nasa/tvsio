@@ -1,6 +1,6 @@
 TVS-IO is a Core Flight Software (cFS) app that enables two-way communication between cFS's Software Bus Network (SBN) and Trick simulations.
 
-Visit the [TVS-IO App Wiki](https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/home) for information on how TVS-IO works, cloning, configuring, building, and running.
+Visit the [TVS-IO App Wiki](https://github.com/nasa/tvsio/wiki) for information on how TVS-IO works, cloning, configuring, building, and running.
 
 Old README info, to be removed when wiki construction is finished:
 

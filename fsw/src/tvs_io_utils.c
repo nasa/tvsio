@@ -1,5 +1,6 @@
 
 #include "tvs_io_utils.h"
+#include <string.h>
 
 double TVS_UnpackDouble(void *buffer)
 {

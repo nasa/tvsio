@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <time.h>
@@ -153,7 +154,7 @@ void  TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t*);
 void  TVS_IO_ReportHousekeeping(void);
 void  TVS_IO_SendOutData(void);
 
-boolean  TVS_IO_VerifyCmdLength(CFE_SB_Msg_t*, uint16);
+bool  TVS_IO_VerifyCmdLength(CFE_SB_Msg_t*, uint16);
 
 #endif /* _TVS_IO_APP_H_ */
 

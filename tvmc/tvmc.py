@@ -11,18 +11,18 @@ import re
 # TODO Add in a generated header that indicates source files, date/time, git commit, etc.. -JWP
 
 # TODO: you're mixing some pretty nasty class naming conventions...
-#       clean that up before this gets too far... 
+#       clean that up before this gets too far...
 # NOTE: I'm not sure where this todo is from and if its been todone -JWP
 
 # TODO: you will need to update the generated code & CFS app to interpret
-#       multiple messages possibly from TVS per frame... this is b.c. 
+#       multiple messages possibly from TVS per frame... this is b.c.
 #       TVS has a max msg size as well as member count apparently...
 #       need to test to verify how all that works...
-# NOTE: I'm not sure where this todo is from and if its been todone -JWP       
+# NOTE: I'm not sure where this todo is from and if its been todone -JWP
 
 class TvsIoCodeGenerator:
 
-    MaxCmdStrlenMacro = "TVS_IO_MAX_COMMAND_STRLEN" 
+    MaxCmdStrlenMacro = "TVS_IO_MAX_COMMAND_STRLEN"
 
     def __init__(self, maxCmdStrlen = 1024):
         self.Mappings = []
@@ -34,7 +34,9 @@ class TvsIoCodeGenerator:
     def GenerateHeaderFileData(self):
 
         magicCode = "#ifndef __TVS_IO_GENERATED_H__\n#define __TVS_IO_GENERATED_H__\n\n"
-        magicCode += "#include \"tvs_io_private_types.h\"\n"
+        magicCode += "#include <stdint.h>\n\n"
+        magicCode += "#include \"cfe_sb.h\"\n\n"
+        magicCode += "#include \"tvs_io_private_types.h\"\n\n"
 
         # Add mapping includes, but only once each
         includedDict = {}
@@ -42,9 +44,6 @@ class TvsIoCodeGenerator:
             if mapping.CfsStructureFilename not in includedDict:
                 magicCode += mapping.EmitIncludeMessages()
                 includedDict[mapping.CfsStructureFilename] = 1
-
-        magicCode += "#include \"cfe_sb.h\"\n\n"
-        magicCode += "#include <stdint.h>\n"
 
         magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
         magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
@@ -58,19 +57,19 @@ class TvsIoCodeGenerator:
             if mapping.FlowDirection & 1:
                 magicCode += mapping.EmitInitMessagesDeclaration() + "\n"
                 magicCode += mapping.EmitUnpackDeclaration()
-            
+
             if mapping.FlowDirection & 2:
                 magicCode += mapping.EmitPackDeclaration() + "\n"
 
-        magicCode += "\n#endif // __TVS_IO_GENERATED_H__"
+        magicCode += "#endif // __TVS_IO_GENERATED_H__"
 
         return magicCode
-    
+
     def GenerateSourceFileData(self):
 
-        magicCode = "#include \"tvs_io_generated.h\"\n"
+        magicCode = "#include <string.h>\n\n"
+        magicCode += "#include \"tvs_io_generated.h\"\n"
         magicCode += "#include \"tvs_io_utils.h\"\n\n"
-        magicCode += "#include <string.h>\n\n"
 
         for mapping in self.Mappings:
 
@@ -83,7 +82,7 @@ class TvsIoCodeGenerator:
         if len(self.Mappings) == 0:
 
             magicCode += "\tOS_printf(\"TVS_IO WARNING: Initialized with no mapping definitions...\\n\");\n"
-        
+
         else:
 
             for x in range(0, len(self.Mappings)):
@@ -94,7 +93,7 @@ class TvsIoCodeGenerator:
                 magicCode += "\tmappings[" + str(x) + "].msgId = " + mapping.MsgIdString + ";\n"
 
                 magicCode += "\tmappings[" + str(x) + "].commandCode = " + str(mapping.CommandCode) + ";\n"
-                
+
                 magicCode += "\tmappings[" + str(x) + "].packetType = " + str(0 if mapping.IsTelemetry else 1) + ";\n"
                 magicCode += "\tmappings[" + str(x) + "].flowDirection = " + str(mapping.FlowDirection) + ";\n"
                 magicCode += "\tmappings[" + str(x) + "].connectionIndex = " + str(mapping.ConnectionIndex) + ";\n"
@@ -104,12 +103,10 @@ class TvsIoCodeGenerator:
                     magicCode += "\tmappings[" + str(x) + "].initMessages = " + mapping.InitMessagesMemberName + ";\n"
                     #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
-                    
-                    magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
-                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), 1);\n\n"
-
+                    magicCode += "\tCFE_MSG_Init((CFE_MSG_Message_t *)mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
+                    magicCode += "CFE_SB_ValueToMsgId(" + mapping.MsgIdString + "), sizeof(" + str(mapping.StructureName) + "));\n\n"
                     if not mapping.IsTelemetry:
-                        magicCode += "\tCFE_SB_SetCmdCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
+                        magicCode += "\tCFE_MSG_SetFcnCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
 
                     magicCode += "\tmappings[" + str(x) + "].unpack = " + mapping.UnpackFunctionName + ";\n\n"
 
@@ -129,12 +126,12 @@ class TvsIoCodeGenerator:
 
             if mapping.FlowDirection & 1:
                 magicCode += mapping.EmitUnpackDefinition() + "\n"
-            
-            if mapping.FlowDirection & 2:    
+
+            if mapping.FlowDirection & 2:
                 magicCode += mapping.EmitPackDefinition() + "\n"
-        
+
         return magicCode
-    
+
     def GetTotalMemberPerConnCount(self):
         # Find the highest connectionIndex to get the total number of connections, kinda sloppy
         idxMax = 0
@@ -162,16 +159,17 @@ class TvsIoMapping:
 
         self.StructureName = structureName
         self.MemberList = []
-        self.MapId = self.MsgIdString
+        self.MemberCountMacro = "TVS_" + structureName.upper() + "_MEMBER_COUNT"
+        self.CfsStructureFilename = structureFilename
+        self.InitMessagesMemberName = "TVS_" + self.StructureName + "_Init_Msgs" + msgIdString
+
+        self.PackFunctionName = "TVS_Pack_" + self.MsgIdString
+        self.UnpackFunctionName = "TVS_Unpack_" + self.MsgIdString
+
         # Message structure depends on command code
         if not self.IsTelemetry:
-            self.MapId += "_{}".format(commandCode)
-        self.MemberCountMacro = "TVS_" + self.MapId.upper() + "_MEMBER_COUNT"
-        self.CfsStructureFilename = structureFilename
-        self.InitMessagesMemberName = "TVS_" + self.MapId + "_Init_Msgs"
-
-        self.PackFunctionName = "TVS_Pack_" + self.MapId
-        self.UnpackFunctionName = "TVS_Unpack_" + self.MapId
+            self.PackFunctionName += "_{}".format(commandCode)
+            self.UnpackFunctionName += "_{}".format(commandCode)
 
     def MemberCount(self):
 
@@ -225,12 +223,11 @@ class TvsIoMapping:
 
         for member in self.MemberList:
             magicCode += member.EmitPackCode()
-        
+
         magicCode += "}\n"
         return magicCode
 
     def EmitUnpackDefinition(self):
-        emitCurMembLenOnce = []
 
         magicCode = "uint32_t " + self.UnpackFunctionName
         magicCode += "(void *mystruct, void *buffer)\n"
@@ -239,9 +236,10 @@ class TvsIoMapping:
         magicCode += "\n\tchar *data = (char*)buffer;\n\n"
 
         magicCode += "\tuint32 byteOffset = 0;\n"
+        magicCode += "\tint32 currentMemberLength = -1;\n\n"
 
         for member in self.MemberList:
-            magicCode += member.EmitUnpackCode(emitCurMembLenOnce)
+            magicCode += member.EmitUnpackCode()
 
         magicCode += "\treturn byteOffset;\n"
         magicCode += "}\n"
@@ -258,7 +256,7 @@ class TvsIoPrimitiveMapping(object):
         self.CfsFieldName = cfsFieldName
         self.MemberIndex = memberIndex
         self.Length = length
-        
+
     def EmitInitMessage(self):
 
         magicCode = "trick.var_add(\\\"" + self.TrickFieldName
@@ -285,21 +283,16 @@ class TvsIoByteArray(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("'%s'")
 
-    def EmitUnpackCode(self, emitCurMembLenOnce):
-        magicCode = ""
+    def EmitUnpackCode(self):
 
-        if len(emitCurMembLenOnce) == 0:
-            magicCode += "\tint32 currentMemberLength = -1;\n\n"
-            emitCurMembLenOnce.append("emitted")
-
-        magicCode += "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"        
+        magicCode = "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"
         magicCode += "\tmemcpy(mystructptr->" + self.CfsFieldName
         magicCode += ", &data[byteOffset + 8], currentMemberLength);\n"
         magicCode += "\tbyteOffset += 8 + currentMemberLength;\n\n"
 
         return magicCode
 
-# TvsIoInt, TvsIoFloat and TvsIoDouble should work for all sizes of 
+# TvsIoInt, TvsIoFloat and TvsIoDouble should work for all sizes of
 # floating point and integer types since we are handling
 # all values by assignment by default... this can be overriden
 # with custom behavior by creating new mapping types if needed...
@@ -316,14 +309,9 @@ class TvsIoInt(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf(self.PackCodeFormatSpecifier)
 
-    def EmitUnpackCode(self, emitCurMembLenOnce):
-        magicCode = ""
+    def EmitUnpackCode(self):
 
-        if len(emitCurMembLenOnce) == 0:
-            magicCode += "\tint32 currentMemberLength = -1;\n\n"
-            emitCurMembLenOnce.append("emitted")
-
-        magicCode += "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"
+        magicCode = "\tcurrentMemberLength = *((int32*) &data[byteOffset + 4] );\n"
         magicCode += "\tmystructptr->" + self.CfsFieldName + " = TVS_Unpack"
         magicCode += "Signed" if self.Signed else "Unsigned"
         magicCode += "Integer( &data[byteOffset + 8], currentMemberLength );\n"
@@ -340,7 +328,7 @@ class TvsIoFloat(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("%f")
 
-    def EmitUnpackCode(self, ignoreCurMemLen):
+    def EmitUnpackCode(self):
 
         magicCode = "\tmystructptr->" + self.CfsFieldName + " = TVS_UnpackFloat( &data[byteOffset + 8] );\n"
         magicCode += "\tbyteOffset += 12;\n\n"
@@ -356,7 +344,7 @@ class TvsIoDouble(TvsIoPrimitiveMapping):
     def EmitPackCode(self):
         return self.EmitPackBySprintf("%f")
 
-    def EmitUnpackCode(self, ignoreCurMemLen):
+    def EmitUnpackCode(self):
 
         magicCode = "\tmystructptr->" + self.CfsFieldName + " = TVS_UnpackDouble( &data[byteOffset + 8] );\n"
         magicCode += "\tbyteOffset += 16;\n\n"
@@ -364,23 +352,10 @@ class TvsIoDouble(TvsIoPrimitiveMapping):
         return magicCode
 
 ####################################################
-############## Supporting Functions ################
-####################################################
-
-def printError(msg):
-    print("\n\033[91m*** TVMC Error ***\033[0m " + msg + "\n")
-
-def printWarning(msg):
-    print("\n\033[93m*** TVMC Warning ***\033[0m " + msg + "\n")
-
-
-####################################################
 ################# Begin App Code ###################
 ####################################################
 
 def main():
-
-    encounteredError = False
 
     parser = argparse.ArgumentParser(description='TVM Compiler for TVS_IO App.')
     parser.add_argument('-o', '--output', help='Output directory for TVS_IO generated code files.')
@@ -392,8 +367,8 @@ def main():
     if (args.output):
         outputDirectory = os.path.abspath(args.output)
         if not os.path.exists(outputDirectory):
-            printError("Output file path '" + outputDirectory + "' does not exist.")
-            return 
+            print("Output file path '" + outputDirectory + "' does not exist.")
+            return
     else:
         outputDirectory = os.path.abspath(".")
 
@@ -402,7 +377,7 @@ def main():
 
     generator = TvsIoCodeGenerator()
 
-    characterArrayRegex = re.compile(r"char\[([0-9]+)\]")
+    characterArrayRegex = re.compile("char\[([0-9]+)\]")
 
     tvm_files = []
     fileObjects = ""
@@ -412,13 +387,13 @@ def main():
     for filePath in args.tvm_files:
 
         if filePath.endswith("*") or filePath.endswith("*.tvm"):
-            
+
             basePath = os.path.dirname(os.path.abspath(filePath))
 
             try:
                 fileNames = os.listdir(basePath)
             except Exception:
-                printWarning("Dir '{0}' does not exist".format(filePath))
+                print("\n\nDir '{0}' does not exist\n".format(filePath))
                 fileNames = []
 
             for fileName in fileNames:
@@ -429,8 +404,7 @@ def main():
             tvm_files.append(filePath)
 
     if len(tvm_files) == 0:
-        printError("No TVM file paths specified")
-        encounteredError = True
+        print("\n\n *** TVMC WARNING: No TVM file paths specified *** \n\n")
 
     # # process the tvm files
     for tvmFilePath in tvm_files:
@@ -443,20 +417,16 @@ def main():
         try:
             fileObjects = json.loads(tvmJsonString)
         except ValueError as err:
-            printError("Parsing file '{0}': {1}".format(tvmFilePath, err))
-            encounteredError = True
+            print("\n\nTVMC Error when parsing file '{0}': {1}\n".format(tvmFilePath, err))
             continue
-        
+
         if isinstance(fileObjects, list):
             for singleTemp in fileObjects:
-                singleTemp[u'tvmFilePath'] = tvmFilePath
                 tvmObjectList.append(singleTemp)
         else:
-            fileObjects[u'tvmFilePath'] = tvmFilePath
             tvmObjectList.append(fileObjects)
 
     for tvmObject in tvmObjectList:
-        tvmFilePath = tvmObject['tvmFilePath']
         try:
             msgId = tvmObject['messageId']
             cfsStructureType = tvmObject['cfsStructureType']
@@ -464,13 +434,11 @@ def main():
             members = tvmObject['members']
             flowDirection = tvmObject['flowDirection']
         except KeyError as err:
-            printError("Missing required parameter '{0}' in tvm file: {1}".format(err.args[0], tvmFilePath))
-            encounteredError = True
+            print("\n\nTVMC Error: missing required parameter '{0}' in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
             continue
 
         if flowDirection < 1 or flowDirection > 3:
-            printError("flowDirection in tvm file '{0}' must have a value of 1, 2, or 3".format(tvmFilePath))
-            encounteredError = True
+            print("\n\nTVMC Error: flowDirection in tvm file '{0}' must have a value of 1, 2, or 3!\n\n", tvmFilePath)
             continue
 
         commandCode = None
@@ -484,22 +452,21 @@ def main():
         nMembers = len(members)
 
         if not members:
-            printWarning("No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
+            print("TVMC WARNING: No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
 
         mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
 
         for x in range(0, nMembers):
 
-            try:            
+            try:
                 trickVar = members[x]['trickVar']
                 trickType = members[x]['trickType']
                 cfsVar = members[x]['cfsVar']
                 cfsType = members[x]['cfsType']
             except KeyError as err:
-                printError("missing '{0}' parameter in tvm file: {1}".format(err.args[0], tvmFilePath))
-                encounteredError = True
+                print("\n\nTVMC Error: missing '{0}' parameter in tvm file: {1}\n\n".format(err.args[0], tvmFilePath))
                 continue
-                
+
             if trickType.startswith("char"):
 
                 match = characterArrayRegex.match(cfsType)
@@ -511,7 +478,7 @@ def main():
                         mapping.MemberList.append(TvsIoByteArray(trickVar, cfsVar, x, int(match.group(1))))
 
                     else: # it's padding
-                        
+
                         continue
 
                 else: # just a single-byte char
@@ -520,7 +487,7 @@ def main():
                         # TODO: add support for single character
 
                     # else: # it's padding
-                        
+
                         continue
 
             elif trickType == "float":
@@ -544,21 +511,11 @@ def main():
 
         generator.AddMapping(mapping)
 
-    fileData = generator.GenerateHeaderFileData()
-
     with open(outputHeaderFilePath, "w") as outputHeaderFile:
-        outputHeaderFile.write(fileData)
-
-    fileData = generator.GenerateSourceFileData()
+        outputHeaderFile.write(generator.GenerateHeaderFileData())
 
     with open(outputSourceFilePath, "w") as outputSourceFile:
-        outputSourceFile.write(fileData)
-
-    if(encounteredError):
-        return -1
-    else:
-        return 0
+        outputSourceFile.write(generator.GenerateSourceFileData())
 
 if __name__ == "__main__":
-    exit(main())
-
+    main()

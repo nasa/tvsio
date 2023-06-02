@@ -38,8 +38,6 @@
 /*
 ** Include Files
 */
-#include <inttypes.h>
-#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -82,107 +80,42 @@ int32 InitConnectionInfo()
     /* Initialize trick variable server socket connections */
     //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
     g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
-    {
-        /* This also zeros the rest of the structure */
-        g_TVS_IO_AppData.servers[conn] = (TVS_IO_TrickServer_t){ .socket = -1 };
-    }
+    memset(&g_TVS_IO_AppData.servers[0], '\0', sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN);
 
-    char envvar_name[64];
-    const char *envvar_val;
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        snprintf(envvar_name, sizeof(envvar_name), "TVS_%d_PORT", conn);
-        uint16_t port = 0;
-        if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
-        {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Found env variable %s, overwriting tvs_io_platform_cfg connection %d", envvar_name, conn);
-            errno = 0;
-            char *end;
-            unsigned long tmp = strtoul(envvar_val, &end, 10);
-            if (*end)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Warning: ignoring trailing garbage \"%s\" in %s", end, envvar_name);
-            }
-            if (errno)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "Failed to parse %s: %s", envvar_name, strerror(errno));
-            }
-            else if (tmp == 0 || tmp > UINT16_MAX)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s %lu is out of range", envvar_name, tmp);
-            }
-            else
-            {
-                port = tmp;
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Using %s=%" PRIu16, envvar_name, port);
-            }
-        }
-        if (!port)
-        {
-            port = TVS_SERVER_PORTS[conn];
-        }
         g_TVS_IO_AppData.servers[conn].serv_addr.sin_family = AF_INET;
-        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(port);
+        g_TVS_IO_AppData.servers[conn].serv_addr.sin_port = htons(TVS_SERVER_PORTS[conn]);
 
-        snprintf(envvar_name, sizeof(envvar_name), "TVS_%d_HOST", conn);
-        bool have_host = false;
-        if ((envvar_val = getenv(envvar_name)) && envvar_val[0])
+        if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
         {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Found env variable %s, overwriting tvs_io_platform_cfg connection %d", envvar_name, conn);
-            if (inet_pton(AF_INET, envvar_val, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) == 1)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "Using %s=%s", envvar_name, envvar_val);
-                have_host = true;
-            }
-        }
-
-        if (!have_host)
-        {
-            if (inet_pton(AF_INET, TVS_SERVER_IPS[conn], &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr) <= 0)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "inet_pton error occured initializing connection %d - %s:%" PRIu16 "!", conn, TVS_SERVER_IPS[conn], port);
-                return -1;
-            }
+            OS_printf("\ninet_pton error occured initializing connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
         }
     }
     return 1;
 }
 
+//TODO should probably find a way to avoid continuously opening sockets in the case of multiple sim connections with sim not running yet -JWP
 int32 ConnectToTrickVariableServer()
 {
-    char addr_buff[INET_ADDRSTRLEN]; // buffer for message output
-    uint16 port;
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
-        inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
-        port = ntohs(g_TVS_IO_AppData.servers[conn].serv_addr.sin_port);
+        OS_printf("TVS_IO: Attempting to connect to TVS connection %d - %s:%d\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
 
-        if (g_TVS_IO_AppData.servers[conn].socket < 0)
+        if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                "TVS_IO - Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
-
-            if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
-                    "TVS_IO - Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
-                return -1;
-            }
-
-            // socket is created, try to connect to trick, close the socket if trick sim doesn't connect
-            if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
-            {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "TVS_IO - Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
-                close(g_TVS_IO_AppData.servers[conn].socket);
-                g_TVS_IO_AppData.servers[conn].socket = -1;
-                return -1;
-            } else {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "TVS_IO - Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
-            }
+            OS_printf("TVS_IO: Error creating TVS connection %d - %s:%d!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
+            return -1;
         }
+
+        if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
+        {
+            OS_printf("TVS_IO: Error: Connect to TVS %d - %s:%d Failed with error: %s\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn], strerror(errno));
+            return -1;
+        }
+
+        OS_printf("TVS_IO: Connection to TVS %d - %s:%d successful!\n", conn, TVS_SERVER_IPS[conn], TVS_SERVER_PORTS[conn]);
     }
     return 1;
 }
@@ -223,11 +156,12 @@ int32 SendInitMessages()
 
 int32 TryReadMessage()
 {
-    /* Because it is possible for trick to send multiple messages for large buffers, 
+    /* Because it is possible for trick to send multiple messages for large buffers,
        we loop and count the number of vars received for each connection to make sure we get it all. */
-    uint32 vars_received; 
+    int32  Status;
+    uint32 vars_received;
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
-        vars_received = 0; 
+        vars_received = 0;
         g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength = 0;
         while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
         {
@@ -241,9 +175,8 @@ int32 TryReadMessage()
                 int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
                 if (bytesRead <= 0)
                 {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
-                    g_TVS_IO_AppData.servers[conn].socket = -1;
+                    //TODO add a warning message here -JWP
                     return -1;
                 }
                 else
@@ -258,7 +191,7 @@ int32 TryReadMessage()
             memcpy(&message_indicator, &buffer[0], 4);
             memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
             memcpy(&n_vars, &buffer[8], 4);
-        
+
             vars_received += n_vars;
 
             message_size -= 8; // chop off the header bytes from msg size
@@ -272,9 +205,8 @@ int32 TryReadMessage()
 
                 if (bytesRead <= 0)
                 {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
-                    g_TVS_IO_AppData.servers[conn].socket = -1;
+                    //TODO add a warning message here -JWP
                     return -1;
                 }
                 else
@@ -310,8 +242,8 @@ int32 TryReadMessage()
 
             byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
-            CFE_SB_TimeStampMsg((CFE_SB_Msg_t *) mappings[i].unpackedDataBuffer);
-            CFE_SB_SendMsg((CFE_SB_Msg_t*)mappings[i].unpackedDataBuffer);
+            CFE_SB_TimeStampMsg((CFE_MSG_Message_t *) mappings[i].unpackedDataBuffer);
+            Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
         }
     }
 
@@ -329,10 +261,12 @@ int32 SendTvsMessage(int conn, char *commandString)
 /* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
-    int32 success = -1;
     while(1)
     {
-        /* Connect to trick, should only be called the first pass, and if the connection is closed */
+        /* Tries to read the messages from trick variable server(s) */
+        int32 success = TryReadMessage();
+
+        /* Loop and try to connect to trick if we were unable to read*/
         if (success < 0)
         {
             while (ConnectToTrickVariableServer() < 0)
@@ -343,10 +277,6 @@ void ReceiveTaskRun()
             /* Configures the trick variable server connection */
             SendInitMessages();
         }
-
-        /* Tries to read the messages from trick variable server(s) */
-        success = TryReadMessage();
-
     } //TODO should we have a better while loop condition? -JWP
       // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
 }
@@ -385,7 +315,7 @@ void ReceiveTaskRun()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -423,7 +353,7 @@ int32 TVS_IO_InitEvent()
 
     return (iStatus);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_InitPipe
 **
@@ -467,7 +397,7 @@ int32 TVS_IO_InitEvent()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -487,14 +417,14 @@ int32 TVS_IO_InitPipe()
                                  g_TVS_IO_AppData.cSchPipeName);
     if (iStatus == CFE_SUCCESS)
     {
-        iStatus = CFE_SB_SubscribeEx(TVS_IO_WAKEUP_MID, g_TVS_IO_AppData.SchPipeId, CFE_SB_Default_Qos, 1);
+        iStatus = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(TVS_IO_WAKEUP_MID), g_TVS_IO_AppData.SchPipeId, CFE_SB_DEFAULT_QOS, 1);
 
         if (iStatus != CFE_SUCCESS)
         {
             CFE_ES_WriteToSysLog("TVS_IO - Sch Pipe failed to subscribe to TVS_IO_WAKEUP_MID. (0x%08X)\n", iStatus);
             goto TVS_IO_InitPipe_Exit_Tag;
         }
-        
+
     }
     else
     {
@@ -514,7 +444,7 @@ int32 TVS_IO_InitPipe()
     if (iStatus == CFE_SUCCESS)
     {
         /* Subscribe to command messages */
-        iStatus = CFE_SB_Subscribe(TVS_IO_CMD_MID, g_TVS_IO_AppData.CmdPipeId);
+        iStatus = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(TVS_IO_CMD_MID), g_TVS_IO_AppData.CmdPipeId);
 
         if (iStatus != CFE_SUCCESS)
         {
@@ -522,14 +452,14 @@ int32 TVS_IO_InitPipe()
             goto TVS_IO_InitPipe_Exit_Tag;
         }
 
-        iStatus = CFE_SB_Subscribe(TVS_IO_SEND_HK_MID, g_TVS_IO_AppData.CmdPipeId);
+        iStatus = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(TVS_IO_SEND_HK_MID), g_TVS_IO_AppData.CmdPipeId);
 
         if (iStatus != CFE_SUCCESS)
         {
             CFE_ES_WriteToSysLog("TVS_IO - CMD Pipe failed to subscribe to TVS_IO_SEND_HK_MID. (0x%08X)\n", iStatus);
             goto TVS_IO_InitPipe_Exit_Tag;
         }
-        
+
     }
     else
     {
@@ -577,7 +507,7 @@ int32 TVS_IO_InitPipe()
         {
             if (mappings[i].flowDirection & CfsToTrick)
             {
-                iStatus = CFE_SB_Subscribe(mappings[i].msgId, g_TVS_IO_AppData.trickPipeId);
+                iStatus = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(mappings[i].msgId), g_TVS_IO_AppData.trickPipeId);
 
                 if (iStatus != CFE_SUCCESS)
                 {
@@ -590,7 +520,7 @@ int32 TVS_IO_InitPipe()
 TVS_IO_InitPipe_Exit_Tag:
     return (iStatus);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_InitData
 **
@@ -603,7 +533,7 @@ TVS_IO_InitPipe_Exit_Tag:
 **    int32 iStatus - Status of initialization
 **
 ** Routines Called:
-**    CFE_SB_InitMsg
+**    CFE_MSG_Init
 **
 ** Called By:
 **    TVS_IO_InitApp
@@ -626,7 +556,7 @@ TVS_IO_InitPipe_Exit_Tag:
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -640,13 +570,13 @@ int32 TVS_IO_InitData()
 
     /* Init output data */
     memset((void*)&g_TVS_IO_AppData.OutData, 0x00, sizeof(g_TVS_IO_AppData.OutData));
-    CFE_SB_InitMsg(&g_TVS_IO_AppData.OutData,
-                   TVS_IO_OUT_DATA_MID, sizeof(g_TVS_IO_AppData.OutData), true);
+    iStatus = CFE_MSG_Init((CFE_MSG_Message_t *)&g_TVS_IO_AppData.OutData,
+                   CFE_SB_ValueToMsgId(TVS_IO_OUT_DATA_MID), sizeof(g_TVS_IO_AppData.OutData) );
 
     /* Init housekeeping packet */
     memset((void*)&g_TVS_IO_AppData.HkTlm, 0x00, sizeof(g_TVS_IO_AppData.HkTlm));
-    CFE_SB_InitMsg(&g_TVS_IO_AppData.HkTlm,
-                   TVS_IO_HK_TLM_MID, sizeof(g_TVS_IO_AppData.HkTlm), true);
+    iStatus = CFE_MSG_Init((CFE_MSG_Message_t *)&g_TVS_IO_AppData.HkTlm,
+                   CFE_SB_ValueToMsgId(TVS_IO_HK_TLM_MID), sizeof(g_TVS_IO_AppData.HkTlm) );
 
     /* Creates data buffers for storing data from trick */
     //TODO these buffers need to be cleaned up with free() -JWP
@@ -657,7 +587,7 @@ int32 TVS_IO_InitData()
 
     return (iStatus);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_InitApp
 **
@@ -697,7 +627,7 @@ int32 TVS_IO_InitData()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -708,20 +638,12 @@ int32 TVS_IO_InitApp()
 
     g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_RUN;
 
-    /* Register TVSIO with cfe executive services */
-    iStatus = CFE_ES_RegisterApp();
-    if (iStatus != CFE_SUCCESS)
-    {
-        CFE_ES_WriteToSysLog("TVS_IO - Failed to register the app (0x%08X)\n", iStatus);
-        goto TVS_IO_InitApp_Exit_Tag;
-    }
-
     /* Calls generated code to initialize messages and buffers for each mapping in the tvm file(s) */
     TVS_IO_InitGeneratedCode(g_TVS_IO_AppData.mappings);
 
     /* Lots of initializing */
-    if ((TVS_IO_InitEvent() != CFE_SUCCESS) || 
-        (TVS_IO_InitPipe() != CFE_SUCCESS) || 
+    if ((TVS_IO_InitEvent() != CFE_SUCCESS) ||
+        (TVS_IO_InitPipe() != CFE_SUCCESS) ||
         (TVS_IO_InitData() != CFE_SUCCESS))
     {
         iStatus = -1;
@@ -730,6 +652,14 @@ int32 TVS_IO_InitApp()
 
     /* Initialize socket connection data for trick variable servers */
     InitConnectionInfo();
+
+    /* Create sockets and try to connect once */
+    //TODO I'm not sure why we do this here when we end up doing it again for ReceiveTaskRun() -JWP
+    // can maybe just remove?
+    if (ConnectToTrickVariableServer() > 0)
+    {
+        SendInitMessages();
+    }
 
     /* Create a child task which will connect to trick variable server and continuously read from trick sockets */
     iStatus = CFE_ES_CreateChildTask(&g_TVS_IO_AppData.receiveTaskId,
@@ -750,7 +680,8 @@ int32 TVS_IO_InitApp()
 TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
     {
-        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION, "Application initialized");
+        CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION,
+                          "TVS_IO - Application initialized");
     }
     else
     {
@@ -759,7 +690,7 @@ TVS_IO_InitApp_Exit_Tag:
 
     return (iStatus);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_CleanupCallback
 **
@@ -793,7 +724,7 @@ TVS_IO_InitApp_Exit_Tag:
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -802,7 +733,7 @@ void TVS_IO_CleanupCallback()
 {
     //TODO Add code to cleanup memory and other cleanup here -JWP
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_RcvMsg
 **
@@ -812,7 +743,7 @@ void TVS_IO_CleanupCallback()
 **    None
 **
 ** Returns:
-**    int32 iStatus - Status of initialization 
+**    int32 iStatus - Status of initialization
 **
 ** Routines Called:
 **    CFE_SB_RcvMsg
@@ -843,7 +774,7 @@ void TVS_IO_CleanupCallback()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -852,22 +783,22 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 {
     /* NOTE this is not where we receive trick or SB messages to send to trick */
     int32           iStatus=CFE_SUCCESS;
-    CFE_SB_Msg_t*   MsgPtr=NULL;
+    CFE_SB_Buffer_t*   MsgPtr=NULL;
     CFE_SB_MsgId_t  MsgId;
 
     /* Stop Performance Log entry */
     CFE_ES_PerfLogExit(TVS_IO_MAIN_TASK_PERF_ID);
 
     /* Wait for WakeUp messages from scheduler */
-    iStatus = CFE_SB_RcvMsg(&MsgPtr, g_TVS_IO_AppData.SchPipeId, iBlocking);
+    iStatus = CFE_SB_ReceiveBuffer(&MsgPtr, g_TVS_IO_AppData.SchPipeId, iBlocking);
 
     /* Start Performance Log entry */
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 
     if (iStatus == CFE_SUCCESS)
     {
-        MsgId = CFE_SB_GetMsgId(MsgPtr);
-        switch (MsgId)
+        iStatus = CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
+        switch (MsgId.Value)
         {
             case TVS_IO_WAKEUP_MID:
                 TVS_IO_ProcessNewCmds();
@@ -900,7 +831,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 
     return (iStatus);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_ProcessNewData
 **
@@ -913,7 +844,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 **    None
 **
 ** Routines Called:
-**    CFE_SB_RcvMsg
+**    CFE_SB_ReceiveBuffer
 **    CFE_SB_GetMsgId
 **    CFE_EVS_SendEvent
 **
@@ -936,7 +867,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -944,19 +875,19 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 void TVS_IO_ProcessNewData()
 {
     int iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t*   TlmMsgPtr=NULL;
+    CFE_SB_Buffer_t*   TlmMsgPtr=NULL;
     CFE_SB_MsgId_t  TlmMsgId;
 
     /* Process telemetry messages till the pipe is empty */
     while (1)
     {
-        iStatus = CFE_SB_RcvMsg(&TlmMsgPtr, g_TVS_IO_AppData.TlmPipeId, CFE_SB_POLL);
+        iStatus = CFE_SB_ReceiveBuffer(&TlmMsgPtr, g_TVS_IO_AppData.TlmPipeId, CFE_SB_POLL);
         if (iStatus == CFE_SUCCESS)
         {
-            TlmMsgId = CFE_SB_GetMsgId(TlmMsgPtr);
-            switch (TlmMsgId)
+            iStatus = CFE_MSG_GetMsgId( &TlmMsgPtr->Msg, &TlmMsgId );
+            switch (TlmMsgId.Value)
             {
-                /* 
+                /*
                 **
                 ** Example:
                 **     case NAV_OUT_DATA_MID:
@@ -982,7 +913,7 @@ void TVS_IO_ProcessNewData()
         }
     }
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_ProcessNewCmds
 **
@@ -995,7 +926,7 @@ void TVS_IO_ProcessNewData()
 **    None
 **
 ** Routines Called:
-**    CFE_SB_RcvMsg
+**    CFE_SB_ReceiveBuffer
 **    CFE_SB_GetMsgId
 **    CFE_EVS_SendEvent
 **    TVS_IO_ProcessNewAppCmds
@@ -1020,7 +951,7 @@ void TVS_IO_ProcessNewData()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
@@ -1028,17 +959,17 @@ void TVS_IO_ProcessNewData()
 void TVS_IO_ProcessNewCmds()
 {
     int iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t*   CmdMsgPtr=NULL;
+    CFE_SB_Buffer_t*   CmdMsgPtr=NULL;
     CFE_SB_MsgId_t  CmdMsgId;
 
     /* Process command messages till the pipe is empty */
     while (1)
     {
-        iStatus = CFE_SB_RcvMsg(&CmdMsgPtr, g_TVS_IO_AppData.CmdPipeId, CFE_SB_POLL);
+        iStatus = CFE_SB_ReceiveBuffer(&CmdMsgPtr, g_TVS_IO_AppData.CmdPipeId, CFE_SB_POLL);
         if(iStatus == CFE_SUCCESS)
         {
-            CmdMsgId = CFE_SB_GetMsgId(CmdMsgPtr);
-            switch (CmdMsgId)
+            iStatus = CFE_MSG_GetMsgId(&CmdMsgPtr->Msg, &CmdMsgId);
+            switch (CmdMsgId.Value)
             {
                 case TVS_IO_CMD_MID:
                     TVS_IO_ProcessNewAppCmds(CmdMsgPtr);
@@ -1048,7 +979,7 @@ void TVS_IO_ProcessNewCmds()
                     TVS_IO_ReportHousekeeping();
                     break;
 
-                /* 
+                /*
                 **
                 ** Example:
                 **     case CFE_TIME_DATA_CMD_MID:
@@ -1075,7 +1006,7 @@ void TVS_IO_ProcessNewCmds()
         }
     }
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_ProcessNewAppCmds
 **
@@ -1111,18 +1042,19 @@ void TVS_IO_ProcessNewCmds()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
-void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
+void TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t* MsgPtr)
 {
-    uint32  uiCmdCode=0;
+    int32              Status;
+    CFE_MSG_FcnCode_t  uiCmdCode=0;
 
     if (MsgPtr != NULL)
     {
-        uiCmdCode = CFE_SB_GetCmdCode(MsgPtr);
+        Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &uiCmdCode);
         switch (uiCmdCode)
         {
             case TVS_IO_NOOP_CC:
@@ -1138,7 +1070,7 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
                                   "TVS_IO - Recvd RESET cmd (%d)", uiCmdCode);
                 break;
 
-            
+
 
             default:
                 g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;
@@ -1148,7 +1080,7 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
         }
     }
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_ReportHousekeeping
 **
@@ -1189,10 +1121,10 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t* MsgPtr)
 **=====================================================================================*/
 void TVS_IO_ReportHousekeeping()
 {
-    CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.HkTlm);
-    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.HkTlm);
+    CFE_SB_TimeStampMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.HkTlm);
+    CFE_SB_TransmitMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.HkTlm, true);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_SendOutData
 **
@@ -1233,10 +1165,10 @@ void TVS_IO_ReportHousekeeping()
 **=====================================================================================*/
 void TVS_IO_SendOutData()
 {
-    CFE_SB_TimeStampMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
-    CFE_SB_SendMsg((CFE_SB_Msg_t*)&g_TVS_IO_AppData.OutData);
+    CFE_SB_TimeStampMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.OutData);
+    CFE_SB_TransmitMsg((CFE_MSG_Message_t*)&g_TVS_IO_AppData.OutData, true);
 }
-    
+
 /*=====================================================================================
 ** Name: TVS_IO_VerifyCmdLength
 **
@@ -1271,25 +1203,28 @@ void TVS_IO_SendOutData()
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
-bool TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
+bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
                            uint16 usExpectedLen)
 {
+    int32   Status;
     bool bResult=false;
-    uint16  usMsgLen=0;
+    CFE_MSG_Size_t    usMsgLen=0;
+    CFE_MSG_FcnCode_t usCmdCode;
+    CFE_SB_MsgId_t    MsgId;
 
     if (MsgPtr != NULL)
     {
-        usMsgLen = CFE_SB_GetTotalMsgLength(MsgPtr);
+        Status = CFE_MSG_GetSize(&MsgPtr->Msg, &usMsgLen);
 
         if (usExpectedLen != usMsgLen)
         {
-            CFE_SB_MsgId_t MsgId = CFE_SB_GetMsgId(MsgPtr);
-            uint16 usCmdCode = CFE_SB_GetCmdCode(MsgPtr);
+            Status = CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
+            Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &usCmdCode);
 
             CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
@@ -1342,16 +1277,13 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Msg_t* MsgPtr,
 ** Algorithm:
 **    Psuedo-code or description of basic algorithm
 **
-** Author(s):  Nexsys 
+** Author(s):  Nexsys
 **
 ** History:  Date Written  2018-03-08
 **           Unit Tested   yyyy-mm-dd
 **=====================================================================================*/
 void TVS_IO_AppMain()
 {
-    /* Register the application with Executive Services */
-    CFE_ES_RegisterApp();
-
     /* Start Performance Log entry */
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 
@@ -1368,7 +1300,9 @@ void TVS_IO_AppMain()
     }
 
     int32 iStatus = CFE_SUCCESS;
-    CFE_SB_Msg_t *trickCmdMsgPtr = NULL;
+    CFE_SB_Buffer_t *trickCmdMsgPtr = NULL;
+    CFE_SB_MsgId_t   mid;
+    CFE_MSG_FcnCode_t cmdCode;
 
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings; // local convenience pointer
 
@@ -1381,17 +1315,17 @@ void TVS_IO_AppMain()
         while(1)
         {
             /* Get the message from the software bus */
-            iStatus = CFE_SB_RcvMsg(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
+            iStatus = CFE_SB_ReceiveBuffer(&trickCmdMsgPtr, g_TVS_IO_AppData.trickPipeId, CFE_SB_POLL);
 
             if (iStatus == CFE_SUCCESS)
             {
-                uint32 mid = CFE_SB_GetMsgId(trickCmdMsgPtr);
-                uint16 cmdCode = CFE_SB_GetCmdCode(trickCmdMsgPtr);
+                iStatus = CFE_MSG_GetMsgId(&trickCmdMsgPtr->Msg, &mid);
+                iStatus = CFE_MSG_GetFcnCode(&trickCmdMsgPtr->Msg, &cmdCode);
 
                 /* If this MID and CC are used for any mappings, pack the message and send it to trick */
                 for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
                 {
-                    if ((mappings[i].msgId == mid) && (mappings[i].flowDirection & CfsToTrick))
+                    if ((mappings[i].msgId == mid.Value) && (mappings[i].flowDirection & CfsToTrick))
                     {
                         if (mappings[i].commandCode != cmdCode)
                         {
@@ -1400,7 +1334,7 @@ void TVS_IO_AppMain()
 
                         char **cmdBuffer = mappings[i].packedCommandBuffer;
 
-                        mappings[i].pack(cmdBuffer, trickCmdMsgPtr);
+                        mappings[i].pack((void **)cmdBuffer, (void *)trickCmdMsgPtr);
 
                         for (int j = 0; j < mappings[i].memberCount; ++j) {
                             SendTvsMessage(mappings[i].connectionIndex, cmdBuffer[j]);
@@ -1426,8 +1360,8 @@ void TVS_IO_AppMain()
 
     /* Exit the application */
     CFE_ES_ExitApp(g_TVS_IO_AppData.uiRunStatus);
-} 
-    
+}
+
 /*=======================================================================================
 ** End of file tvs_io_app.c
 **=====================================================================================*/

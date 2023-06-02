@@ -4,17 +4,18 @@ cmake_policy(SET CMP0077 NEW)
 
 find_package( PythonInterp 2.7 REQUIRED )
 
-string(
-    CONCAT
-    TVS_IO_PER_TARGET_CONFIG_DOC
-    "Look for TVM files in target-specific directories; see "
-    "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
-)
-option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
+#string(
+#    CONCAT
+#    TVS_IO_PER_TARGET_CONFIG_DOC
+#    "Look for TVM files in target-specific directories; see "
+#    "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
+#)
+#option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
 set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' directory for CFS mission
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../target_defs/shared)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/platform_inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/src)
@@ -36,7 +37,8 @@ set(TVM_FILE_DIR_ARG $ENV{TVM_FILE_DIR})
 
 if (NOT DEFINED TVM_FILE_DIR_ARG)
 
-    set(TVS_IO_TVM_FILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../inc/tvm_files/*")
+    #set(TVS_IO_TVM_FILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../inc/tvm_files/*")
+    set(TVS_IO_TVM_FILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../target_defs/shared/tvm_files/*")
 
 else()
 
@@ -56,8 +58,8 @@ endif()
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
     COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS 
-        ../inc/tvm_files/*.tvm
+   # DEPENDS 
+   #     ../inc/tvm_files/*.tvm
 )
 
 # Create the app module

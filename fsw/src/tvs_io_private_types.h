@@ -69,7 +69,7 @@ typedef struct
 
 typedef struct
 {
-    uint8  ucCmdHeader[CFE_SB_CMD_HDR_SIZE];
+    CFE_MSG_CommandHeader_t  ucCmdHeader;
 } TVS_IO_NoArgCmd_t;
 
 typedef struct
@@ -84,7 +84,7 @@ typedef struct
 
 typedef struct
 {
-    uint8   ucTlmHeader[CFE_SB_TLM_HDR_SIZE];
+    CFE_MSG_TelemetryHeader_t   ucTlmHeader;
     uint32  uiCounter;
 } TVS_IO_OutData_t;
 

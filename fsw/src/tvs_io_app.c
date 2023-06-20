@@ -671,7 +671,6 @@ int32 TVS_IO_InitData()
 **    int32 iStatus - Status of initialization
 **
 ** Routines Called:
-**    CFE_ES_RegisterApp
 **    CFE_ES_WriteToSysLog
 **    CFE_EVS_SendEvent
 **    OS_TaskInstallDeleteHandler
@@ -1313,7 +1312,6 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
 **    None
 **
 ** Routines Called:
-**    CFE_ES_RegisterApp
 **    CFE_ES_RunLoop
 **    CFE_ES_PerfLogEntry
 **    CFE_ES_PerfLogExit
@@ -1348,9 +1346,6 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
 **=====================================================================================*/
 void TVS_IO_AppMain()
 {
-    /* Register the application with Executive Services */
-    CFE_ES_RegisterApp();
-
     /* Start Performance Log entry */
     CFE_ES_PerfLogEntry(TVS_IO_MAIN_TASK_PERF_ID);
 

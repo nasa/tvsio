@@ -709,15 +709,6 @@ int32 TVS_IO_InitApp()
 
     g_TVS_IO_AppData.uiRunStatus = CFE_ES_RunStatus_APP_RUN;
 
-    //NOTE This was removed in cfe draco updates, why? 
-    /* Register TVSIO with cfe executive services */
-    iStatus = CFE_ES_RegisterApp();
-    if (iStatus != CFE_SUCCESS)
-    {
-        CFE_ES_WriteToSysLog("TVS_IO - Failed to register the app (0x%08X)\n", iStatus);
-        goto TVS_IO_InitApp_Exit_Tag;
-    }
-
     /* Calls generated code to initialize messages and buffers for each mapping in the tvm file(s) */
     TVS_IO_InitGeneratedCode(g_TVS_IO_AppData.mappings);
 

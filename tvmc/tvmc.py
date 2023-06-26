@@ -186,14 +186,14 @@ class TvsIoMapping:
 
     def EmitInitMessagesDeclaration(self):
 
-        magicCode = "extern char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode = "extern const char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
         magicCode += "];\n"
 
         return magicCode
 
     def EmitInitMessagesDefinition(self):
 
-        magicCode = "char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode = "const char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
         magicCode += "] = \n{\n"
 
         for member in self.MemberList:

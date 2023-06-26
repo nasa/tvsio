@@ -129,12 +129,12 @@ typedef struct
 **  Not all of these are meant to be used externally.
 */
 
-int32 InitConnectionInfo();
-int32 ConnectToTrickVariableServer();
-int32 SendInitMessages();
-int32 TryReadMessage();
-int32 SendTvsMessage(int conn, char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
-void  ReceiveTaskRun();
+int32 InitConnectionInfo(void);
+int32 ConnectToTrickVariableServer(void);
+int32 SendInitMessages(void);
+int32 TryReadMessage(void);
+int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
+void  ReceiveTaskRun(void);
 
 int32 TVS_IO_InitApp(void);
 int32 TVS_IO_InitEvent(void);

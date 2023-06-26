@@ -30,7 +30,7 @@
 **   2020-12-XX | Nexsys | Multi-sim support capability added
 **
 **=====================================================================================*/
-
+//GLOBAL TODO: Clean up comments/code docs -JWP
 /*
 ** Pragmas
 */
@@ -204,7 +204,7 @@ int32 SendInitMessages()
     {
         if (mappings[i].flowDirection & TrickToCfs)
         {
-            char **initMessages = mappings[i].initMessages;
+            const char **initMessages = mappings[i].initMessages;
 
             for (int j = 0; j < mappings[i].memberCount; ++j)
             {
@@ -225,7 +225,7 @@ int32 TryReadMessage()
 {
     /* Because it is possible for trick to send multiple messages for large buffers, 
        we loop and count the number of vars received for each connection to make sure we get it all. */
-    int32 Status;
+    //int32 Status; //TODO implement return checking, needed in all functions -JWP
     uint32 vars_received; 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
         vars_received = 0;
@@ -312,7 +312,8 @@ int32 TryReadMessage()
             byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
 
             CFE_SB_TimeStampMsg((CFE_MSG_Message_t *) mappings[i].unpackedDataBuffer);
-            Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
+            CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
+            //Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true); //TODO implement status error checking -JWP
         }
     }
 
@@ -320,7 +321,7 @@ int32 TryReadMessage()
 }
 
 /* Sends a message to trick */
-int32 SendTvsMessage(int conn, char *commandString)
+int32 SendTvsMessage(int conn, const char *commandString)
 {
     // TODO: error checking... broken connections, etc.
     write(g_TVS_IO_AppData.servers[conn].socket, commandString, strlen(commandString));
@@ -737,7 +738,7 @@ int32 TVS_IO_InitApp()
     }
 
     /* Install the cleanup callback */
-    OS_TaskInstallDeleteHandler((void*)&TVS_IO_CleanupCallback);
+    OS_TaskInstallDeleteHandler(&TVS_IO_CleanupCallback);
 
 TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
@@ -1111,12 +1112,12 @@ void TVS_IO_ProcessNewCmds()
 **=====================================================================================*/
 void TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t* MsgPtr)
 {
-    int32   Status;
+    //int32   Status;
     CFE_MSG_FcnCode_t  uiCmdCode=0;
 
     if (MsgPtr != NULL)
     {
-        Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &uiCmdCode);
+        CFE_MSG_GetFcnCode(&MsgPtr->Msg, &uiCmdCode);
         switch (uiCmdCode)
         {
             case TVS_IO_NOOP_CC:
@@ -1273,7 +1274,7 @@ void TVS_IO_SendOutData()
 bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
                            uint16 usExpectedLen)
 {
-    int32   Status;
+    //int32   Status;
     bool bResult=false;
     CFE_MSG_Size_t    usMsgLen=0;
     CFE_MSG_FcnCode_t usCmdCode;
@@ -1281,18 +1282,17 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
 
     if (MsgPtr != NULL)
     {
-        Status = CFE_MSG_GetSize(&MsgPtr->Msg, &usMsgLen);
+        CFE_MSG_GetSize(&MsgPtr->Msg, &usMsgLen);
 
         if (usExpectedLen != usMsgLen)
         {
-            Status = CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
-            Status = CFE_MSG_GetFcnCode(&MsgPtr->Msg, &usCmdCode);
-            //TODO These Status vars are never used anywhere, throws many warnings
+            CFE_MSG_GetMsgId(&MsgPtr->Msg, &MsgId);
+            CFE_MSG_GetFcnCode(&MsgPtr->Msg, &usCmdCode);
 
             CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
-                              "msgLen=%d, expectedLen=%d",
-                              MsgId, usCmdCode, usMsgLen, usExpectedLen);
+                              "msgLen=%lu, expectedLen=%d",
+                              (uint32)MsgId.Value, usCmdCode, (size_t)usMsgLen, usExpectedLen);
             g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;
         }
     }

@@ -12,7 +12,6 @@ string(
 )
 option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
-set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' directory for CFS mission
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)

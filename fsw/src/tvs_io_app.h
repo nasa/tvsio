@@ -101,7 +101,7 @@ typedef struct
     //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // TODO Decide which is the best approach -JWP
     TVS_IO_TrickServer_t * servers;
 
-    uint32 receiveTaskId;
+    CFE_ES_TaskId_t receiveTaskId;
 
     TVS_IO_Mapping mappings[TVS_IO_MAPPING_COUNT];
 

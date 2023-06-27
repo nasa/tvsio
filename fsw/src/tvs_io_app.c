@@ -1291,8 +1291,8 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
 
             CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
                               "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
-                              "msgLen=%lu, expectedLen=%d",
-                              (uint32)MsgId.Value, usCmdCode, (size_t)usMsgLen, usExpectedLen);
+                              "msgLen=%u, expectedLen=%d",
+                              (uint32)MsgId.Value, usCmdCode, (uint32)usMsgLen, usExpectedLen);
             g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;
         }
     }

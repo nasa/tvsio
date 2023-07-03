@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 project(CFE_TVS_IO_APP C)
 cmake_policy(SET CMP0077 NEW)
 
-find_package( PythonInterp 2.7 REQUIRED )
+find_package(Python COMPONENTS Interpreter)
 
 string(
     CONCAT

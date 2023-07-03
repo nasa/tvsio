@@ -195,6 +195,10 @@ int32 SendInitMessages()
     {
         SendTvsMessage(conn, TVS_PAUSE_CMD);
         SendTvsMessage(conn, TVS_SET_BINARY_NO_NAMES);
+        #if(TVS_BYTE_SWAP) // Caution! Experimental, use at your own risk!
+            // trick variable server will byte swap data before sending to tvsio, enable in tvs_io_platform_cfg.h
+            SendTvsMessage(conn, TVS_SET_BYTE_SWAP_CMD);
+        #endif
         SendTvsMessage(conn, TVS_SET_COPY_MODE_CMD);
         SendTvsMessage(conn, TVS_SET_WRITE_MODE_CMD);
     }

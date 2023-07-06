@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(CFE_TVS_IO_APP C)
 cmake_policy(SET CMP0077 NEW)
-
+#include(CMakePrintHelpers) # for debugging build
 find_package(Python COMPONENTS Interpreter)
 
 string(
@@ -54,7 +54,7 @@ endif()
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
-    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
     #DEPENDS 
         #../inc/tvm_files/*.tvm
 )

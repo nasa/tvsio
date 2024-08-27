@@ -54,7 +54,7 @@ endif()
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
-    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS 
         ${TVS_IO_TVM_FILE_DIR}
 )

@@ -101,7 +101,7 @@ typedef struct
     //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // TODO Decide which is the best approach -JWP
     TVS_IO_TrickServer_t * servers;
 
-    uint32 receiveTaskId;
+    CFE_ES_TaskId_t receiveTaskId;
 
     TVS_IO_Mapping mappings[TVS_IO_MAPPING_COUNT];
 
@@ -129,12 +129,12 @@ typedef struct
 **  Not all of these are meant to be used externally.
 */
 
-int32 InitConnectionInfo();
-int32 ConnectToTrickVariableServer();
-int32 SendInitMessages();
-int32 TryReadMessage();
-int32 SendTvsMessage(int conn, char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
-void  ReceiveTaskRun();
+int32 InitConnectionInfo(void);
+int32 ConnectToTrickVariableServer(void);
+int32 SendInitMessages(void);
+int32 TryReadMessage(void);
+int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
+void  ReceiveTaskRun(void);
 
 int32 TVS_IO_InitApp(void);
 int32 TVS_IO_InitEvent(void);
@@ -149,12 +149,12 @@ int32 TVS_IO_RcvMsg(int32 iBlocking);
 
 void  TVS_IO_ProcessNewData(void);
 void  TVS_IO_ProcessNewCmds(void);
-void  TVS_IO_ProcessNewAppCmds(CFE_SB_Msg_t*);
+void  TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t*);
 
 void  TVS_IO_ReportHousekeeping(void);
 void  TVS_IO_SendOutData(void);
 
-bool  TVS_IO_VerifyCmdLength(CFE_SB_Msg_t*, uint16);
+bool  TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t*, uint16);
 
 #endif /* _TVS_IO_APP_H_ */
 

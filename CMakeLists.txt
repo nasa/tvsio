@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.13)
 project(CFE_TVS_IO_APP C)
 cmake_policy(SET CMP0077 NEW)
-
-find_package( PythonInterp 2.7 REQUIRED )
+#include(CMakePrintHelpers) # for debugging build
+find_package(Python COMPONENTS Interpreter)
 
 string(
     CONCAT
@@ -12,7 +12,6 @@ string(
 )
 option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
-set (CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' directory for CFS mission
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)
@@ -55,7 +54,7 @@ endif()
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
-    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS 
         ${TVS_IO_TVM_FILE_DIR}
 )

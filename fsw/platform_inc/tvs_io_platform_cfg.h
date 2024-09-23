@@ -56,6 +56,13 @@
 
 #define TVS_IO_FRAME_DATA_BUFFER_SIZE 81920 // 80 kB default - can be tuned up or down based on data rate per frame
 
+/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+/* Caution: The byte swap implementation below is expermental!       */
+/* This will only byte swap data coming FROM trick (flowDirection 1) */
+#define TVS_BYTE_SWAP false // Set to true to byte swap, use at your own risk
+#define TVS_SET_BYTE_SWAP_CMD "trick.var_byteswap(1)\n"
+/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+
 #endif /* _TVS_IO_PLATFORM_CFG_H_ */
 
 /*=======================================================================================

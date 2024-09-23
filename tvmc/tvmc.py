@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import os
 import argparse
 import json
@@ -105,11 +104,10 @@ class TvsIoCodeGenerator:
                     #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
                     
-                    magicCode += "\tCFE_SB_InitMsg(mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
-                    magicCode += mapping.MsgIdString + ", sizeof(" + str(mapping.StructureName) + "), 1);\n\n"
-
+                    magicCode += "\tCFE_MSG_Init((CFE_MSG_Message_t *)mappings[" + str(x) + "].unpackedDataBuffer,\n\t\t\t\t\t"
+                    magicCode += "CFE_SB_ValueToMsgId(" + mapping.MsgIdString + "), sizeof(" + str(mapping.StructureName) + "));\n\n"
                     if not mapping.IsTelemetry:
-                        magicCode += "\tCFE_SB_SetCmdCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
+                        magicCode += "\tCFE_MSG_SetFcnCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
 
                     magicCode += "\tmappings[" + str(x) + "].unpack = " + mapping.UnpackFunctionName + ";\n\n"
 
@@ -187,14 +185,14 @@ class TvsIoMapping:
 
     def EmitInitMessagesDeclaration(self):
 
-        magicCode = "extern char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode = "extern const char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
         magicCode += "];\n"
 
         return magicCode
 
     def EmitInitMessagesDefinition(self):
 
-        magicCode = "char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode = "const char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
         magicCode += "] = \n{\n"
 
         for member in self.MemberList:

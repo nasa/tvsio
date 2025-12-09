@@ -51,6 +51,11 @@
 /*
 ** Local Defines
 */
+#define TVSIO_MAX_CONN_ATTEMPT (3)
+
+/* Return codes */
+#define TVSIO_CONN_SUCCESS (1)
+#define TVSIO_CONN_FAILURE (-1)
 
 /*
 ** Local Structure Declarations

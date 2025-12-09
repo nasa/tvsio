@@ -161,30 +161,30 @@ int32 ConnectToTrickVariableServer()
         if (g_TVS_IO_AppData.servers[conn].socket < 0)
         {
             CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                "TVS_IO - Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
+                "Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
 
             if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
             {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
-                    "TVS_IO - Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
-                return -1;
+                    "Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
+                return TVSIO_CONN_FAILURE;
             }
 
             // socket is created, try to connect to trick, close the socket if trick sim doesn't connect
             if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
             {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "TVS_IO - Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
+                    "Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
                 close(g_TVS_IO_AppData.servers[conn].socket);
                 g_TVS_IO_AppData.servers[conn].socket = -1;
-                return -1;
+                return TVSIO_CONN_FAILURE;
             } else {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "TVS_IO - Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
+                    "Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
             }
         }
     }
-    return 1;
+    return TVSIO_CONN_SUCCESS;
 }
 
 int32 SendInitMessages()
@@ -246,7 +246,7 @@ int32 TryReadMessage()
                 int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
                 if (bytesRead <= 0)
                 {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
+                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
                     g_TVS_IO_AppData.servers[conn].socket = -1;
                     return -1;
@@ -277,7 +277,7 @@ int32 TryReadMessage()
 
                 if (bytesRead <= 0)
                 {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "TVS connection %d appears to have disconnected", conn);
+                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, conn);
                     close(g_TVS_IO_AppData.servers[conn].socket);
                     g_TVS_IO_AppData.servers[conn].socket = -1;
                     return -1;
@@ -335,23 +335,58 @@ int32 SendTvsMessage(int conn, const char *commandString)
 /* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
-    int32 success = -1;
-    while(1)
-    {
-        /* Connect to trick, should only be called the first pass, and if the connection is closed */
-        if (success < 0)
-        {
-            while (ConnectToTrickVariableServer() < 0)
-            {
-                OS_TaskDelay(3000); // wait a few secs and try again...
-            }
+    int32 success = TVSIO_CONN_FAILURE;
+    int32 iConnStatus = TVSIO_CONN_FAILURE;
+    bool bConnected = false;
 
-            /* Configures the trick variable server connection */
-            SendInitMessages();
+    /* Child thread forever loop */
+    while(true)
+    {
+        /* If we are not connected */
+        if (bConnected == false)
+        {
+            /* Attempt to connect to trick #TVSIO_MAX_CONN_ATTEMPT times */
+            CFE_EVS_SendEvent(TVS_IO_INF_EID, CFE_EVS_EventType_INFORMATION,
+                "%s: Attempting to connect TVSIO!",
+                __func__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
+            for (uint8 ucConnAttemptCount = 0; 
+                (bConnected == false) && (ucConnAttemptCount < TVSIO_MAX_CONN_ATTEMPT); 
+                ucConnAttemptCount++)
+            {
+                /* Attempt to connect */
+                iConnStatus = ConnectToTrickVariableServer();
+                /* Wait 10 s then try again */
+                OS_TaskDelay(10000);
+                
+                if (iConnStatus == TVSIO_CONN_SUCCESS)
+                {
+                    bConnected = true;
+                    /* Configures the trick variable server connection */
+                    SendInitMessages();
+                    break;
+                }
+            }
+            /* If failed to connect, report once */
+            if (iConnStatus != TVSIO_CONN_SUCCESS)
+            {
+                CFE_EVS_SendEvent(TVS_IO_ERR_EID, CFE_EVS_EventType_ERROR,
+                    "%s: Error - TVSIO failed to connect after %u attempts! Retry in 60s",
+                    __func__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
+                /* Wait 60000 ms - 1 min */
+                OS_TaskDelay(60000);
+            }
+        }
+        /* If we are connected already */
+        else
+        {
+            /* Tries to read the messages from trick variable server(s) */
+            if (TryReadMessage() != TVSIO_CONN_SUCCESS)
+            {
+                bConnected = false;
+                OS_TaskDelay(3000);
+            }
         }
 
-        /* Tries to read the messages from trick variable server(s) */
-        success = TryReadMessage();
 
     } //TODO should we have a better while loop condition? -JWP
       // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
@@ -748,7 +783,7 @@ TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
     {
         CFE_EVS_SendEvent(TVS_IO_INIT_INF_EID, CFE_EVS_EventType_INFORMATION, 
-                        "TVS_IO - Application initialized");
+                        "Application initialized");
     }
     else
     {
@@ -878,7 +913,7 @@ int32 TVS_IO_RcvMsg(int32 iBlocking)
 
             default:
                 CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
-                                  "TVS_IO - Recvd invalid SCH msgId (0x%08X)", MsgId.Value);
+                                  "Recvd invalid SCH msgId (0x%08X)", MsgId.Value);
                 TVS_IO_ProcessNewData();
         }
     }
@@ -963,7 +998,7 @@ void TVS_IO_ProcessNewData()
                 */
                 default:
                     CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
-                                      "TVS_IO - Recvd invalid TLM msgId (0x%08X)", TlmMsgId.Value);
+                                      "Recvd invalid TLM msgId (0x%08X)", TlmMsgId.Value);
                     break;
             }
         }
@@ -1056,7 +1091,7 @@ void TVS_IO_ProcessNewCmds()
 
                 default:
                     CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
-                                      "TVS_IO - Recvd invalid CMD msgId (0x%08X)", CmdMsgId.Value);
+                                      "Recvd invalid CMD msgId (0x%08X)", CmdMsgId.Value);
                     break;
             }
         }
@@ -1127,14 +1162,14 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t* MsgPtr)
             case TVS_IO_NOOP_CC:
                 g_TVS_IO_AppData.HkTlm.usCmdCnt++;
                 CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_EventType_INFORMATION,
-                                  "TVS_IO - Recvd NOOP cmd (%d)", uiCmdCode);
+                                  "Recvd NOOP cmd (%d)", uiCmdCode);
                 break;
 
             case TVS_IO_RESET_CC:
                 g_TVS_IO_AppData.HkTlm.usCmdCnt = 0;
                 g_TVS_IO_AppData.HkTlm.usCmdErrCnt = 0;
                 CFE_EVS_SendEvent(TVS_IO_CMD_INF_EID, CFE_EVS_EventType_INFORMATION,
-                                  "TVS_IO - Recvd RESET cmd (%d)", uiCmdCode);
+                                  "Recvd RESET cmd (%d)", uiCmdCode);
                 break;
 
             
@@ -1142,7 +1177,7 @@ void TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t* MsgPtr)
             default:
                 g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;
                 CFE_EVS_SendEvent(TVS_IO_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
-                                  "TVS_IO - Recvd invalid cmdId (%d)", uiCmdCode);
+                                  "Recvd invalid cmdId (%d)", uiCmdCode);
                 break;
         }
     }
@@ -1294,7 +1329,7 @@ bool TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t* MsgPtr,
             CFE_MSG_GetFcnCode(&MsgPtr->Msg, &usCmdCode);
 
             CFE_EVS_SendEvent(TVS_IO_MSGLEN_ERR_EID, CFE_EVS_EventType_ERROR,
-                              "TVS_IO - Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
+                              "Rcvd invalid msgLen: msgId=0x%08X, cmdCode=%d, "
                               "msgLen=%u, expectedLen=%d",
                               (uint32)MsgId.Value, usCmdCode, (uint32)usMsgLen, usExpectedLen);
             g_TVS_IO_AppData.HkTlm.usCmdErrCnt++;

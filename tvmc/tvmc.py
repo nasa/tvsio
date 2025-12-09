@@ -55,6 +55,7 @@ class TvsIoCodeGenerator:
             magicCode += mapping.EmitMacroDefs() + "\n"
 
             if mapping.FlowDirection & 1:
+                magicCode += mapping.EmitValidateMessagesDeclaration() + "\n"
                 magicCode += mapping.EmitInitMessagesDeclaration() + "\n"
                 magicCode += mapping.EmitUnpackDeclaration()
             
@@ -74,6 +75,7 @@ class TvsIoCodeGenerator:
         for mapping in self.Mappings:
 
             if mapping.FlowDirection & 1:
+                magicCode += mapping.EmitValidateMessagesDefinition() + "\n"
                 magicCode += mapping.EmitInitMessagesDefinition() + "\n"
 
         # generate the initialization function
@@ -100,6 +102,7 @@ class TvsIoCodeGenerator:
 
                 if mapping.FlowDirection & 1:
 
+                    magicCode += "\tmappings[" + str(x) + "].validateMessages = " + mapping.ValidateMessagesMemberName + ";\n"
                     magicCode += "\tmappings[" + str(x) + "].initMessages = " + mapping.InitMessagesMemberName + ";\n"
                     #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].unpackedDataBuffer = (char*)malloc(sizeof(" + mapping.StructureName + "));\n"
@@ -113,6 +116,8 @@ class TvsIoCodeGenerator:
 
                 if mapping.FlowDirection & 2:
 
+                    magicCode += "\tmappings[" + str(x) + "].validateMessages = NULL;\n"
+                    magicCode += "\tmappings[" + str(x) + "].initMessages = NULL;\n"
                     #TODO don't these mallocs need free() cleanup to prevent creating memory leaks? -JWP
                     magicCode += "\tmappings[" + str(x) + "].packedCommandBuffer = (char**)malloc(" + str(mapping.MemberCount()) + "*sizeof(char*));\n"
                     magicCode += "\tfor (int i = 0; i < " + str(mapping.MemberCount()) + "; ++i)\n"
@@ -166,6 +171,7 @@ class TvsIoMapping:
             self.MapId += "_{}".format(commandCode)
         self.MemberCountMacro = "TVS_" + self.MapId.upper() + "_MEMBER_COUNT"
         self.CfsStructureFilename = structureFilename
+        self.ValidateMessagesMemberName = "TVS_" + self.MapId + "_Validate_Msgs"
         self.InitMessagesMemberName = "TVS_" + self.MapId + "_Init_Msgs"
 
         self.PackFunctionName = "TVS_Pack_" + self.MapId
@@ -183,11 +189,29 @@ class TvsIoMapping:
 
         return "#define " + self.MemberCountMacro + " " + str(len(self.MemberList)) + "\n"
 
+    def EmitValidateMessagesDeclaration(self):
+
+        magicCode = "extern const char *" + self.ValidateMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode += "];\n"
+
+        return magicCode
+
     def EmitInitMessagesDeclaration(self):
 
         magicCode = "extern const char *" + self.InitMessagesMemberName + "[" + self.MemberCountMacro
         magicCode += "];\n"
 
+        return magicCode
+
+    def EmitValidateMessagesDefinition(self):
+
+        magicCode = "const char *" + self.ValidateMessagesMemberName + "[" + self.MemberCountMacro
+        magicCode += "] = \n{\n"
+
+        for member in self.MemberList:
+            magicCode += "\t\"" + member.EmitValidateMessage() + "\",\n"
+
+        magicCode += "};\n"
         return magicCode
 
     def EmitInitMessagesDefinition(self):
@@ -261,6 +285,13 @@ class TvsIoPrimitiveMapping(object):
     def EmitInitMessage(self):
 
         magicCode = "trick.var_add(\\\"" + self.TrickFieldName
+        magicCode += "\\\") \\n"
+
+        return magicCode
+
+    def EmitValidateMessage(self):
+
+        magicCode = "trick.var_exists(\\\"" + self.TrickFieldName
         magicCode += "\\\") \\n"
 
         return magicCode

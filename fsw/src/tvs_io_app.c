@@ -41,6 +41,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <pthread.h>
 
 #include "cfe.h"
@@ -187,6 +188,37 @@ int32 ConnectToTrickVariableServer()
     return TVSIO_CONN_SUCCESS;
 }
 
+void CheckVariableExistence(int sockfd, const char *commandString) {
+    // Send the message to the server
+    ssize_t sent = write(sockfd, commandString, strlen(commandString));
+    if (sent < 0) {
+        fprintf(stderr, "Error sending message '%s'\n", commandString);
+    }
+
+    // Read the 4-byte message indicator
+    uint32_t indicator;
+    ssize_t received = read(sockfd, &indicator, sizeof(indicator));
+    if (received != sizeof(indicator)) {
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Problem reading message indicator for variable '%s'\n", __func__, commandString);
+    }
+
+    // Read the 1-byte existence value
+    uint8_t exists;
+    received = read(sockfd, &exists, sizeof(exists));
+    if (received != sizeof(exists)) {
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Problem reading existence byte for variable '%s'\n", __func__, commandString);
+    }
+
+    // Check existence
+    if (exists == 0) {
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Variable '%s' Does not exist in sim\n", __func__, commandString);
+    }
+}
+
+
 int32 SendInitMessages()
 {
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
@@ -208,8 +240,12 @@ int32 SendInitMessages()
     {
         if (mappings[i].flowDirection & TrickToCfs)
         {
-            const char **initMessages = mappings[i].initMessages;
+            for (int j = 0; j < mappings[i].memberCount; ++j)
+            {
+                CheckVariableExistence(g_TVS_IO_AppData.servers[mappings[i].connectionIndex].socket, mappings[i].validateMessages[j]);
+            }
 
+            const char **initMessages = mappings[i].initMessages;
             for (int j = 0; j < mappings[i].memberCount; ++j)
             {
                 SendTvsMessage(mappings[i].connectionIndex, initMessages[j]);

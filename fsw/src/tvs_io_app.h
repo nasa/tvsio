@@ -136,6 +136,7 @@ typedef struct
 
 int32 InitConnectionInfo(void);
 int32 ConnectToTrickVariableServer(void);
+void CheckVariableExistence(int sockfd, const char *commandString);
 int32 SendInitMessages(void);
 int32 TryReadMessage(void);
 int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)

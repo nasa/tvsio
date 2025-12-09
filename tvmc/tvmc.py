@@ -362,7 +362,7 @@ class TvsIoFloat(TvsIoPrimitiveMapping):
             trickFieldName, cfsFieldName, memberIndex, length = 4)
 
     def EmitPackCode(self):
-        return self.EmitPackBySprintf("%f")
+        return self.EmitPackBySprintf("%.8f")
 
     def EmitUnpackCode(self):
 
@@ -382,7 +382,7 @@ class TvsIoDouble(TvsIoPrimitiveMapping):
             trickFieldName, cfsFieldName, memberIndex, length = 8)
 
     def EmitPackCode(self):
-        return self.EmitPackBySprintf("%f")
+        return self.EmitPackBySprintf("%.12f")
 
     def EmitUnpackCode(self):
 

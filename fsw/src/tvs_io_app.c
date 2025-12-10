@@ -192,7 +192,8 @@ void CheckVariableExistence(int sockfd, const char *commandString) {
     // Send the message to the server
     ssize_t sent = write(sockfd, commandString, strlen(commandString));
     if (sent < 0) {
-        fprintf(stderr, "Error sending message '%s'\n", commandString);
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Problem sending message '%s'", __func__, commandString);
     }
 
     // Read the 4-byte message indicator
@@ -200,7 +201,7 @@ void CheckVariableExistence(int sockfd, const char *commandString) {
     ssize_t received = read(sockfd, &indicator, sizeof(indicator));
     if (received != sizeof(indicator)) {
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem reading message indicator for variable '%s'\n", __func__, commandString);
+            "%s: Error - Problem reading message indicator for variable '%s'", __func__, commandString);
     }
 
     // Read the 1-byte existence value
@@ -208,13 +209,15 @@ void CheckVariableExistence(int sockfd, const char *commandString) {
     received = read(sockfd, &exists, sizeof(exists));
     if (received != sizeof(exists)) {
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem reading existence byte for variable '%s'\n", __func__, commandString);
+            "%s: Error - Problem reading existence byte for variable '%s'", __func__, commandString);
     }
 
     // Check existence
     if (exists == 0) {
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Variable '%s' Does not exist in sim\n", __func__, commandString);
+            "%s: Error - Trick returned DOES NOT EXIST for variable check:", __func__);
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "Error Continued - '%s'", commandString);
     }
 }
 
@@ -383,8 +386,7 @@ void ReceiveTaskRun()
         {
             /* Attempt to connect to trick #TVSIO_MAX_CONN_ATTEMPT times */
             CFE_EVS_SendEvent(TVS_IO_INF_EID, CFE_EVS_EventType_INFORMATION,
-                "%s: Attempting to connect TVSIO!",
-                __func__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
+                "Attempting TVSIO to Trick Connection", (uint32)TVSIO_MAX_CONN_ATTEMPT);
             for (uint8 ucConnAttemptCount = 0; 
                 (bConnected == false) && (ucConnAttemptCount < TVSIO_MAX_CONN_ATTEMPT); 
                 ucConnAttemptCount++)
@@ -406,18 +408,19 @@ void ReceiveTaskRun()
             if (iConnStatus != TVSIO_CONN_SUCCESS)
             {
                 CFE_EVS_SendEvent(TVS_IO_ERR_EID, CFE_EVS_EventType_ERROR,
-                    "%s: Error - TVSIO failed to connect after %u attempts! Retry in 60s",
-                    __func__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
+                    "%s:%d Error - TVSIO failed to connect after %u attempts! Retry in 60s",
+                    __func__, __LINE__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
                 /* Wait 60000 ms - 1 min */
                 OS_TaskDelay(60000);
             }
         }
-        /* If we are connected already */
+        /* Else we're connected already */
         else
         {
             /* Tries to read the messages from trick variable server(s) */
             if (TryReadMessage() != TVSIO_CONN_SUCCESS)
             {
+                // Connection lost, reset flag and wait a few secs before starting back
                 bConnected = false;
                 OS_TaskDelay(3000);
             }

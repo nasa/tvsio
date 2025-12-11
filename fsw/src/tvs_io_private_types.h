@@ -48,6 +48,7 @@ enum FlowDirection { TrickToCfs = 1, CfsToTrick = 2, BiDirectional = 3 };
 typedef struct
 {
     int32 memberCount;
+    const char **validateMessages; // will be NULL for command types
     const char **initMessages; // will be NULL for command types
 
     uint8 packetType; // 0 for tlm, 1 for cmd

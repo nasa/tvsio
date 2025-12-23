@@ -217,13 +217,13 @@ void CheckVariableExistence(int sockfd, const char *commandString) {
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
             "%s: Error - Trick returned DOES NOT EXIST for variable check:", __func__);
         CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "Error Continued - '%s'", commandString);
+            "Error Continued - %s", commandString);
     }
 }
 
-
 int32 SendInitMessages()
 {
+    //CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "%s: Initializing trick", __func__);
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
@@ -236,6 +236,8 @@ int32 SendInitMessages()
         #endif
         SendTvsMessage(conn, TVS_SET_COPY_MODE_CMD);
         SendTvsMessage(conn, TVS_SET_WRITE_MODE_CMD);
+        // Increase the variable server cycle rate to get through init faster
+        SendTvsMessage(conn, TVS_GO_FAST_CMD);
     }
 
     // send out application-specific init messages...
@@ -259,8 +261,10 @@ int32 SendInitMessages()
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
     {
         SendTvsMessage(conn, TVS_UNPAUSE_CMD);
+        SendTvsMessage(conn, TVS_GO_SLOW_CMD); // put the variable server cycle rate back to default
     }
 
+    //CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "%s: DONE Initializing trick", __func__);
     return 1;
 }
 
@@ -408,10 +412,10 @@ void ReceiveTaskRun()
             if (iConnStatus != TVSIO_CONN_SUCCESS)
             {
                 CFE_EVS_SendEvent(TVS_IO_ERR_EID, CFE_EVS_EventType_ERROR,
-                    "%s:%d Error - TVSIO failed to connect after %u attempts! Retry in 60s",
+                    "%s:%d Error - TVSIO failed to connect after %u attempts! Retry in 45s",
                     __func__, __LINE__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
-                /* Wait 60000 ms - 1 min */
-                OS_TaskDelay(60000);
+                /* Wait 45000 ms */
+                OS_TaskDelay(45000);
             }
         }
         /* Else we're connected already */

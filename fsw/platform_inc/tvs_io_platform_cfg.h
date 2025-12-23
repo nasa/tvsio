@@ -48,6 +48,10 @@
 
 #define TVS_UNPAUSE_CMD "trick.var_unpause()\n"
 
+#define TVS_GO_FAST_CMD "trick.var_cycle(0.005)\n"
+
+#define TVS_GO_SLOW_CMD "trick.var_cycle(0.1)\n"
+
 #define TVS_SET_BINARY_NO_NAMES "trick.var_binary_nonames()\n"
 
 #define TVS_SET_COPY_MODE_CMD "trick.var_set_copy_mode(0)\n"

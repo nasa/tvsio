@@ -378,7 +378,6 @@ int32 SendTvsMessage(int conn, const char *commandString)
 /* Child task function for looping and receiving from trick */
 void ReceiveTaskRun()
 {
-    int32 success = TVSIO_CONN_FAILURE;
     int32 iConnStatus = TVSIO_CONN_FAILURE;
     bool bConnected = false;
 
@@ -390,7 +389,7 @@ void ReceiveTaskRun()
         {
             /* Attempt to connect to trick #TVSIO_MAX_CONN_ATTEMPT times */
             CFE_EVS_SendEvent(TVS_IO_INF_EID, CFE_EVS_EventType_INFORMATION,
-                "Attempting TVSIO to Trick Connection", (uint32)TVSIO_MAX_CONN_ATTEMPT);
+                "Attempting TVSIO to Trick Connection %u", (uint32)TVSIO_MAX_CONN_ATTEMPT);
             for (uint8 ucConnAttemptCount = 0; 
                 (bConnected == false) && (ucConnAttemptCount < TVSIO_MAX_CONN_ATTEMPT); 
                 ucConnAttemptCount++)

@@ -39,7 +39,6 @@
 #include <time.h>
 
 #include "tvs_io_platform_cfg.h"
-#include "tvs_io_mission_cfg.h"
 #include "tvs_io_private_ids.h"
 #include "tvs_io_private_types.h"
 #include "tvs_io_perfids.h"

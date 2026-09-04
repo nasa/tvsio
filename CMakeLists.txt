@@ -14,8 +14,8 @@ ${CMAKE_CURRENT_BINARY_DIR}
 set(TVS_IO_TVM_INCLUDE_DIRS)
 
 set(APP_SRC_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_app.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_utils.c
+    fsw/src/tvs_io_app.c
+    fsw/src/tvs_io_utils.c
     ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c
 )
 

@@ -47,7 +47,6 @@
 #include "cfe.h"
 
 #include "tvs_io_platform_cfg.h"
-#include "tvs_io_mission_cfg.h"
 #include "tvs_io_app.h"
 
 #include "cfe_platform_cfg.h"

@@ -1,27 +1,21 @@
-cmake_minimum_required(VERSION 3.13)
-project(CFE_TVS_IO_APP C)
-cmake_policy(SET CMP0077 NEW)
+cmake_minimum_required(VERSION 3.26)
+project(CFE_TVS_IO_APP C CXX)
 #include(CMakePrintHelpers) # for debugging build
 find_package(Python COMPONENTS Interpreter)
 
-string(
-    CONCAT
-    TVS_IO_PER_TARGET_CONFIG_DOC
-    "Look for TVM files in target-specific directories; see "
-    "https://esgl-gitlab.jsc.nasa.gov/tricksbn/tvsio_app/-/wikis/Per-Target-Configuration"
+
+set(TVS_IO_INCLUDE_DIRS
+fsw/platform_inc
+fsw/mission_inc
+fsw/src
+${CMAKE_CURRENT_BINARY_DIR}
 )
-option(TVS_IO_PER_TARGET_CONFIG ${TVS_IO_PER_TARGET_CONFIG_DOC})
 
-
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc) # global 'apps/inc/' directory for CFS mission
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/mission_inc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/platform_inc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fsw/src)
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+set(TVS_IO_TVM_INCLUDE_DIRS)
 
 set(APP_SRC_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_app.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/fsw/src/tvs_io_utils.c
+    fsw/src/tvs_io_app.c
+    fsw/src/tvs_io_utils.c
     ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c
 )
 
@@ -31,35 +25,40 @@ add_custom_target(
     COMMENT "Generates code from *.tvm files during tvs_io build"
 )
 
-set(TVM_FILE_DIR_ARG $ENV{TVM_FILE_DIR})
+set(SPECIFIED_CONFIG ${BUILD_CONFIG_${TARGETSYSTEM}})
+list(GET SPECIFIED_CONFIG 2 TGT_NAME)
+list(GET SPECIFIED_CONFIG 0 PLATFORM_NAME)
 
-if (NOT DEFINED TVM_FILE_DIR_ARG)
-
-    set(TVS_IO_TVM_FILE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../inc/tvm_files/*")
-
+if (EXISTS "${MISSION_DEFS}/tvsio_config.cmake")
+set(TVS_IO_TVM_FILES)
+include(${MISSION_DEFS}/tvsio_config.cmake)
 else()
+message(WARNING "No ${MISSION_DEFS}/tvsio_config.cmake detected. Using pre-defined includes and tvm file directory locations.")
+FILE(GLOB TVS_IO_TVM_FILES ${MISSION_SOURCE_DIR}/apps/inc/tvm_files/*.tvm)
+endif()
 
-    get_filename_component(TVS_IO_TVM_FILE_DIR ${TVM_FILE_DIR_ARG} ABSOLUTE)
-    if(TVS_IO_PER_TARGET_CONFIG)
-        list(LENGTH INSTALL_TARGET_LIST INSTALL_TARGET_COUNT)
-        if(NOT ${INSTALL_TARGET_COUNT} EQUAL 1)
-            message(FATAL_ERROR "TVS_IO per-target configuration only works with one target in INSTALL_TARGET_LIST")
-        endif()
-        set(TVS_IO_TVM_FILE_DIR "${TVS_IO_TVM_FILE_DIR}/${INSTALL_TARGET_LIST}/*")
-    else()
-        set(TVS_IO_TVM_FILE_DIR "${TVS_IO_TVM_FILE_DIR}/*")
-    endif()
-
+if(NOT TVS_IO_TVM_FILES)
+message(FATAL_ERROR "No TVM files found!")
+else()
+message(STATUS "TVS tvmc will process")
+foreach(file IN LISTS TVS_IO_TVM_FILES)
+  message(STATUS "  ${file}")
+endforeach()
 endif()
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.c ${CMAKE_CURRENT_BINARY_DIR}/tvs_io_generated.h
-    COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILE_DIR} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py" ${TVS_IO_TVM_FILES} "-o" "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS 
-        ${TVS_IO_TVM_FILE_DIR}
+        ${TVS_IO_TVM_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/tvmc/tvmc.py
 )
 
 # Create the app module
 add_cfe_app(tvs_io ${APP_SRC_FILES})
 
 add_dependencies(tvs_io run_tvmc)
+
+
+target_include_directories(tvs_io PUBLIC
+    ${TVS_IO_INCLUDE_DIRS} ${TVS_IO_TVM_INCLUDE_DIRS}
+)

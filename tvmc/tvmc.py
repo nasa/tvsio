@@ -114,6 +114,9 @@ class TvsIoCodeGenerator:
 
                     magicCode += "\tmappings[" + str(x) + "].unpack = " + mapping.UnpackFunctionName + ";\n\n"
 
+                    if mapping.Rate != 0:
+                        magicCode += "\tmappings[" + str(x) + "].trickToCfsRate = " + str(mapping.Rate) + ";\n\n"
+
                 if mapping.FlowDirection & 2:
 
                     magicCode += "\tmappings[" + str(x) + "].validateMessages = NULL;\n"
@@ -154,12 +157,13 @@ class TvsIoCodeGenerator:
 
 class TvsIoMapping:
 
-    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None):
+    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None, rate = None):
         self.MsgIdString = msgIdString
         self.MsgId = int(msgIdString, 16)
         self.FlowDirection = flowDirection
         self.CommandCode = 0 if commandCode is None else commandCode
         self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
+        self.Rate = 0 if rate is None else rate
 
         self.IsTelemetry = commandCode is None
 
@@ -506,20 +510,27 @@ def main():
             encounteredError = True
             continue
 
+        rate = None
+        if 'rate' in tvmObject:
+            if flowDirection == 2:
+                printWarning("Specified rates are only for Trick-to-CFS flow directions (i.e. 1 or 3)")
+            else:
+                rate = tvmObject['rate']
+
         commandCode = None
         if "commandCode" in tvmObject:
             commandCode = tvmObject["commandCode"]
 
         connectionIndex = None
         if "connectionIndex" in tvmObject:
-            connectionIndex = tvmObject["connectionIndex"]
+            connectionIndex = tvmObject["connectionIndex"]        
 
         nMembers = len(members)
 
         if not members:
             printWarning("No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
 
-        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
+        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex, rate)
 
         for x in range(0, nMembers):
 

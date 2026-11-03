@@ -43,11 +43,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "cfe.h"
 
 #include "tvs_io_platform_cfg.h"
 #include "tvs_io_app.h"
+#include "tvs_io_utils.h"
 
 #include "cfe_platform_cfg.h"
 
@@ -59,6 +61,7 @@
 /*
 ** Local Structure Declarations
 */
+static const long long timeTicValue = 1000000;
 
 /*
 ** External Global Variables
@@ -80,12 +83,9 @@ TVS_IO_AppData_t  g_TVS_IO_AppData;
 int32 InitConnectionInfo()
 {
     /* Initialize trick variable server socket connections */
-    //TODO cleanup memory, we don't call free() anywhere. Or change TVS_IO_AppData_t.servers to use static array (see note in header file) -JWP
-    g_TVS_IO_AppData.servers = (TVS_IO_TrickServer_t *)malloc( sizeof(TVS_IO_TrickServer_t) * TVS_NUM_SIM_CONN );
     for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
-    {
-        /* This also zeros the rest of the structure */
-        g_TVS_IO_AppData.servers[conn] = (TVS_IO_TrickServer_t){ .socket = -1 };
+    {        /* This also zeros the rest of the structure */
+        g_TVS_IO_AppData.servers[conn] = (TVS_IO_TrickServer_t){ .socket = -1, .trickToCfsRateInTics = 100000 };
     }
 
     char envvar_name[64];
@@ -149,41 +149,57 @@ int32 InitConnectionInfo()
     return 1;
 }
 
-int32 ConnectToTrickVariableServer()
+int32 ConnectToTrickVariableServerByConn(int32 connIdx)
 {
     char addr_buff[INET_ADDRSTRLEN]; // buffer for message output
     uint16 port;
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    OS_time_t currTime;
+    int64 currTimeInSec;
+
+    if (g_TVS_IO_AppData.servers[connIdx].socket < 0)
     {
-        inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[conn].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
-        port = ntohs(g_TVS_IO_AppData.servers[conn].serv_addr.sin_port);
+        OS_GetLocalTime(&currTime);
+        currTimeInSec = OS_TimeGetTotalSeconds(currTime);
 
-        if (g_TVS_IO_AppData.servers[conn].socket < 0)
-        {
+        inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[connIdx].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
+        port = ntohs(g_TVS_IO_AppData.servers[connIdx].serv_addr.sin_port);
+
+        if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs) {
             CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                "Attempting to connect to TVS connection %d - %s:%d", conn, addr_buff, port);
+                "Attempting to connect to TVS connection %d - %s:%d", connIdx, addr_buff, port);
+        }
 
-            if ((g_TVS_IO_AppData.servers[conn].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-            {
+        if ((g_TVS_IO_AppData.servers[connIdx].socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        {
+            if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs) {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
-                    "Error creating socket for TVS %d - %s:%d: %s", conn, addr_buff, port, strerror(errno));
-                return TVSIO_CONN_FAILURE;
+                    "Error creating socket for TVS %d - %s:%d: %s", connIdx, addr_buff, port, strerror(errno));
             }
+            return TVSIO_CONN_FAILURE;
+        }
 
-            // socket is created, try to connect to trick, close the socket if trick sim doesn't connect
-            if (connect(g_TVS_IO_AppData.servers[conn].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[conn].serv_addr, sizeof(struct sockaddr_in)) < 0)
-            {
+        // socket is created, try to connect to trick, close the socket if trick sim doesn't connect
+        if (connect(g_TVS_IO_AppData.servers[connIdx].socket, (struct sockaddr *)&g_TVS_IO_AppData.servers[connIdx].serv_addr, sizeof(struct sockaddr_in)) < 0)
+        {
+            if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs) {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "Connect to TVS %d - %s:%d Failed with error: %s", conn, addr_buff, port, strerror(errno));
-                close(g_TVS_IO_AppData.servers[conn].socket);
-                g_TVS_IO_AppData.servers[conn].socket = -1;
-                return TVSIO_CONN_FAILURE;
-            } else {
-                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
-                    "Connection to TVS %d - %s:%d successful!", conn, addr_buff, port);
+                    "Connect to TVS %d - %s:%d Failed with error: %s", connIdx, addr_buff, port, strerror(errno));
+                g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + 60;
             }
+            close(g_TVS_IO_AppData.servers[connIdx].socket);
+            g_TVS_IO_AppData.servers[connIdx].socket = -1;
+            return TVSIO_CONN_FAILURE;
+        } else {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
+                "Connection to TVS %d - %s:%d successful!", connIdx, addr_buff, port);
+            g_TVS_IO_AppData.servers[connIdx].nextTimeToRunInTics = g_TVS_IO_AppData.currVirtualTimeInTics;
+        }
+        if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs)
+        {
+            g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + 60;
         }
     }
+    
     return TVSIO_CONN_SUCCESS;
 }
 
@@ -220,146 +236,227 @@ void CheckVariableExistence(int sockfd, const char *commandString) {
     }
 }
 
-int32 SendInitMessages()
+uint32_t TVS_UnpackRealTimeData(void *mystruct, void *buffer)
 {
-    //CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "%s: Initializing trick", __func__);
-    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
+	TVS_IO_SimTime_t *mystructptr = (TVS_IO_SimTime_t *)mystruct;
+	char *data = (char*)buffer;
 
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+	uint32 byteOffset = 0;
+	int32 currentMemberLength = -1;
+	uint32 currentMemberType = 0;
+
+	currentMemberType = *((int32*) &data[byteOffset] );
+	currentMemberLength = *((int32*) &data[byteOffset + 4] );
+	if (currentMemberType == 6)
+	{
+	   mystructptr->time_tic_value = TVS_UnpackSignedInteger( &data[byteOffset + 8], 4 );
+	}
+	byteOffset += 8 + currentMemberLength;
+
+	currentMemberType = *((int32*) &data[byteOffset] );
+	currentMemberLength = *((int32*) &data[byteOffset + 4] );
+	if (currentMemberType == 14)
+	{
+	   mystructptr->rt_frame_tics = TVS_UnpackSignedInteger( &data[byteOffset + 8], 8 );
+	}
+	byteOffset += 8 + currentMemberLength;
+
+	return byteOffset;
+}
+
+void SendInitMessagesByConn(int32 connIdx)
+{
+    TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
+    TVS_IO_SimTime_t sTime = {0};
+
+    SendTvsMessage(connIdx, TVS_PAUSE_CMD);
+    SendTvsMessage(connIdx, TVS_SET_BINARY_NO_NAMES);
+    #if(TVS_BYTE_SWAP) // Caution! Experimental, use at your own risk!
+        // trick variable server will byte swap data before sending to tvsio, enable in tvs_io_platform_cfg.h
+        SendTvsMessage(coconnIdxnn, TVS_SET_BYTE_SWAP_CMD);
+    #endif
+    SendTvsMessage(connIdx, TVS_SET_COPY_MODE_CMD);
+    SendTvsMessage(connIdx, TVS_SET_WRITE_MODE_CMD);
+    // Get realtime frame settings
+    SendTvsMessage(connIdx, "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n");
+
+    // Read the 4-byte message indicator
+    int32_t indicator;
+    ssize_t received = read(g_TVS_IO_AppData.servers[connIdx].socket, &indicator, sizeof(indicator));
+    if (received != sizeof(indicator)) {
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Problem reading message indicator var_send_once", __func__);
+    }
+    if(indicator == 5)
     {
-        SendTvsMessage(conn, TVS_PAUSE_CMD);
-        SendTvsMessage(conn, TVS_SET_BINARY_NO_NAMES);
-        #if(TVS_BYTE_SWAP) // Caution! Experimental, use at your own risk!
-            // trick variable server will byte swap data before sending to tvsio, enable in tvs_io_platform_cfg.h
-            SendTvsMessage(conn, TVS_SET_BYTE_SWAP_CMD);
-        #endif
-        SendTvsMessage(conn, TVS_SET_COPY_MODE_CMD);
-        SendTvsMessage(conn, TVS_SET_WRITE_MODE_CMD);
-        // Increase the variable server cycle rate to get through init faster
-        SendTvsMessage(conn, TVS_GO_FAST_CMD);
+        int32_t msg_size;
+        received = read(g_TVS_IO_AppData.servers[connIdx].socket, &msg_size, sizeof(msg_size));
+        if(received != sizeof(msg_size))
+        {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+               "%s: Error - Problem reading message size var_send_once", __func__);
+        }
+        msg_size -= sizeof(msg_size);
+
+        char buffer[8192];
+        ssize_t remainder = msg_size;
+        while(remainder > 0)
+        {
+            received = read(g_TVS_IO_AppData.servers[connIdx].socket, &buffer[msg_size-remainder], remainder);
+            if(received < 0) {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, connIdx);
+                close(g_TVS_IO_AppData.servers[connIdx].socket);
+                g_TVS_IO_AppData.servers[connIdx].socket = -1;
+                return;
+            } else {
+                remainder -= received;
+            }
+        }
+        
+        int32_t num_vars = TVS_UnpackSignedInteger( &buffer[0], 4 );
+        if(num_vars != 2)
+        {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+               "%s: Error - Problem reading num vars for realtime tics requests", __func__);
+        } else {
+            TVS_UnpackRealTimeData(&sTime, buffer+4);
+        }
+
+    } else{
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Error - Got unexpected message indicator. Expected 5. Received %u.\n", __func__, indicator);
     }
 
     // send out application-specific init messages...
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
     {
-        if (mappings[i].flowDirection & TrickToCfs)
-        {
-            for (int j = 0; j < mappings[i].memberCount; ++j)
+        if(mappings[i].connectionIndex == connIdx) {
+            if (mappings[i].flowDirection & TrickToCfs)
             {
-                CheckVariableExistence(g_TVS_IO_AppData.servers[mappings[i].connectionIndex].socket, mappings[i].validateMessages[j]);
-            }
+                for (int j = 0; j < mappings[i].memberCount; ++j)
+                {
+                    CheckVariableExistence(g_TVS_IO_AppData.servers[mappings[i].connectionIndex].socket, mappings[i].validateMessages[j]);
+                }
 
-            const char **initMessages = mappings[i].initMessages;
-            for (int j = 0; j < mappings[i].memberCount; ++j)
-            {
-                SendTvsMessage(mappings[i].connectionIndex, initMessages[j]);
+                const char **initMessages = mappings[i].initMessages;
+                for (int j = 0; j < mappings[i].memberCount; ++j)
+                {
+                    SendTvsMessage(mappings[i].connectionIndex, initMessages[j]);
+                }
             }
         }
     }
 
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    double simRtCycle = (double) sTime.rt_frame_tics/sTime.time_tic_value;
+    long long simRtRateInTics = (long long)round(simRtCycle * timeTicValue);
+    long long remainder = g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics % simRtRateInTics;
+    double varCycle = (double)g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics/timeTicValue;
+    if(remainder > 0)
     {
-        SendTvsMessage(conn, TVS_UNPAUSE_CMD);
-        SendTvsMessage(conn, TVS_GO_SLOW_CMD); // put the variable server cycle rate back to default
+        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+            "%s: Warning - Connection %d rate mismatch. Sim rate == %2.6f but requested rate is %2.6f\n", __func__, connIdx, simRtCycle, varCycle);
+        g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics = simRtRateInTics;
+        varCycle = (double)g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics/timeTicValue;
     }
-
-    //CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, "%s: DONE Initializing trick", __func__);
-    return 1;
+    char buff[64];
+    snprintf(buff, sizeof(buff), "trick.var_cycle(%2.6f)\n", varCycle);
+    SendTvsMessage(connIdx, buff); // Set the requested var server rate
+    SendTvsMessage(connIdx, TVS_UNPAUSE_CMD);
 }
 
-int32 TryReadMessage()
+int32 TryReadMessageByConn(int32 connIdx)
 {
     /* Because it is possible for trick to send multiple messages for large buffers, 
        we loop and count the number of vars received for each connection to make sure we get it all. */
     //int32 Status; //TODO implement return checking, needed in all functions -JWP
-    uint32 vars_received; 
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
-        vars_received = 0;
-        g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength = 0;
-        while (vars_received < TVS_IO_TOTAL_VARS_CONN[conn])
-        {
-            int headerLength = 0;
-            //TODO shouldn't we allocate this outside of the loop, and just clear the buffer? -JWP
-            char buffer[8192]; // Max message size trick will send
-
-            // Read the 12 byte header from the socket
-            while (headerLength < 12)
-            {
-                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + headerLength, 12 - headerLength);
-                if (bytesRead <= 0)
-                {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, conn);
-                    close(g_TVS_IO_AppData.servers[conn].socket);
-                    g_TVS_IO_AppData.servers[conn].socket = -1;
-                    return -1;
-                }
-                else
-                {
-                    headerLength += bytesRead;
-                }
-            }
-
-            int message_indicator = -1, message_size = -1, n_vars = -1;
-
-            /* Get useful info from the header */
-            memcpy(&message_indicator, &buffer[0], 4);
-            memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
-            memcpy(&n_vars, &buffer[8], 4);
-
-            vars_received += n_vars;
-
-            message_size -= 8; // chop off the header bytes from msg size
-
-            int payloadBytesRead = 0;
-
-            // read payload into buffer
-            while (payloadBytesRead < message_size)
-            {
-                int bytesRead = read(g_TVS_IO_AppData.servers[conn].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
-
-                if (bytesRead <= 0)
-                {
-                    CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, conn);
-                    close(g_TVS_IO_AppData.servers[conn].socket);
-                    g_TVS_IO_AppData.servers[conn].socket = -1;
-                    return -1;
-                }
-                else
-                {
-                    payloadBytesRead += bytesRead;
-                }
-            }
-
-            // copy data from read buffer into frame data buffer
-            memcpy(g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer + g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength,
-                    buffer, payloadBytesRead);
-
-            g_TVS_IO_AppData.frameDataBuffers[conn].frameBufferLength += payloadBytesRead;
-        }
+    if(g_TVS_IO_AppData.servers[connIdx].socket < 0)
+    {
+        return -1;
     }
+
+    uint32 vars_received = 0;
+    g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength = 0;
+    while (vars_received < TVS_IO_TOTAL_VARS_CONN[connIdx])
+    {
+        int headerLength = 0;
+        //TODO shouldn't we allocate this outside of the loop, and just clear the buffer? -JWP
+        char buffer[8192]; // Max message size trick will send
+
+        // Read the 12 byte header from the socket
+        while (headerLength < 12)
+        {
+            int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, buffer + headerLength, 12 - headerLength);
+            if (bytesRead <= 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, connIdx);
+                close(g_TVS_IO_AppData.servers[connIdx].socket);
+                g_TVS_IO_AppData.servers[connIdx].socket = -1;
+                return -1;
+            }
+            else
+            {
+                headerLength += bytesRead;
+            }
+        }
+
+        int message_indicator = -1, message_size = -1, n_vars = -1;
+
+        /* Get useful info from the header */
+        memcpy(&message_indicator, &buffer[0], 4);
+        memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
+        memcpy(&n_vars, &buffer[8], 4);
+
+        vars_received += n_vars;
+
+        message_size -= 8; // chop off the header bytes from msg size
+
+        int payloadBytesRead = 0;
+
+        // read payload into buffer
+        while (payloadBytesRead < message_size)
+        {
+            int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
+
+            if (bytesRead <= 0)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", __func__, connIdx);
+                close(g_TVS_IO_AppData.servers[connIdx].socket);
+                g_TVS_IO_AppData.servers[connIdx].socket = -1;
+                return -1;
+            }
+            else
+            {
+                payloadBytesRead += bytesRead;
+            }
+        }
+
+        // copy data from read buffer into frame data buffer
+        memcpy(g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength,
+                buffer, payloadBytesRead);
+
+        g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength += payloadBytesRead;
+    }
+    
 
     // process the frame data one mapping at a time
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
 
-    uint32_t byteOffsets[TVS_NUM_SIM_CONN];
-    for(int i =0; i <TVS_NUM_SIM_CONN; ++i) {
-        byteOffsets[i] = 0;
-    }
-    uint8_t connIdx = 0; // shorthand convenience variable
+    uint32_t byteOffsets = 0;
 
     /* Process the data from trick by placing into the MIDs and sending on the SB for other apps to pick up */
     for (int i = 0; i < TVS_IO_MAPPING_COUNT; ++i)
     {
-        if (mappings[i].flowDirection & TrickToCfs)
-        {
-            connIdx = mappings[i].connectionIndex;
-            void *unpackedDataBuffer = mappings[i].unpackedDataBuffer;
+        if(mappings[i].connectionIndex == connIdx) {
+            if (mappings[i].flowDirection & TrickToCfs)
+            {
+                void *unpackedDataBuffer = mappings[i].unpackedDataBuffer;
 
-            byteOffsets[connIdx] += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets[connIdx]);
+                byteOffsets += mappings[i].unpack(unpackedDataBuffer, g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + byteOffsets);
 
-            CFE_SB_TimeStampMsg((CFE_MSG_Message_t *) mappings[i].unpackedDataBuffer);
-            CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
-            //Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true); //TODO implement status error checking -JWP
+                CFE_SB_TimeStampMsg((CFE_MSG_Message_t *) mappings[i].unpackedDataBuffer);
+                CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true);
+                //Status = CFE_SB_TransmitMsg((CFE_MSG_Message_t*)mappings[i].unpackedDataBuffer, true); //TODO implement status error checking -JWP
+            }
         }
     }
 
@@ -372,65 +469,6 @@ int32 SendTvsMessage(int conn, const char *commandString)
     // TODO: error checking... broken connections, etc.
     write(g_TVS_IO_AppData.servers[conn].socket, commandString, strlen(commandString));
     return 1;
-}
-
-/* Child task function for looping and receiving from trick */
-void ReceiveTaskRun()
-{
-    int32 iConnStatus = TVSIO_CONN_FAILURE;
-    bool bConnected = false;
-
-    /* Child thread forever loop */
-    while(true)
-    {
-        /* If we are not connected */
-        if (bConnected == false)
-        {
-            /* Attempt to connect to trick #TVSIO_MAX_CONN_ATTEMPT times */
-            CFE_EVS_SendEvent(TVS_IO_INF_EID, CFE_EVS_EventType_INFORMATION,
-                "Attempting TVSIO to Trick Connection %u", (uint32)TVSIO_MAX_CONN_ATTEMPT);
-            for (uint8 ucConnAttemptCount = 0; 
-                (bConnected == false) && (ucConnAttemptCount < TVSIO_MAX_CONN_ATTEMPT); 
-                ucConnAttemptCount++)
-            {
-                /* Attempt to connect */
-                iConnStatus = ConnectToTrickVariableServer();
-                /* Wait 10 s then try again */
-                OS_TaskDelay(10000);
-                
-                if (iConnStatus == TVSIO_CONN_SUCCESS)
-                {
-                    bConnected = true;
-                    /* Configures the trick variable server connection */
-                    SendInitMessages();
-                    break;
-                }
-            }
-            /* If failed to connect, report once */
-            if (iConnStatus != TVSIO_CONN_SUCCESS)
-            {
-                CFE_EVS_SendEvent(TVS_IO_ERR_EID, CFE_EVS_EventType_ERROR,
-                    "%s:%d Error - TVSIO failed to connect after %u attempts! Retry in 45s",
-                    __func__, __LINE__, (uint32)TVSIO_MAX_CONN_ATTEMPT);
-                /* Wait 45000 ms */
-                OS_TaskDelay(45000);
-            }
-        }
-        /* Else we're connected already */
-        else
-        {
-            /* Tries to read the messages from trick variable server(s) */
-            if (TryReadMessage() != TVSIO_CONN_SUCCESS)
-            {
-                // Connection lost, reset flag and wait a few secs before starting back
-                bConnected = false;
-                OS_TaskDelay(3000);
-            }
-        }
-
-
-    } //TODO should we have a better while loop condition? -JWP
-      // something like while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
 }
 
 /*=====================================================================================
@@ -730,16 +768,22 @@ int32 TVS_IO_InitData()
     iStatus = CFE_MSG_Init((CFE_MSG_Message_t *)&g_TVS_IO_AppData.HkTlm,
                    CFE_SB_ValueToMsgId(TVS_IO_HK_TLM_MID), sizeof(g_TVS_IO_AppData.HkTlm));
 
-    /* Creates data buffers for storing data from trick */
-    //TODO these buffers need to be cleaned up with free() -JWP
-    //TODO Should the buffers be initialized to zero or NULL? -JWP
-    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn) {
-        g_TVS_IO_AppData.frameDataBuffers[conn].frameBuffer = (char*)malloc(TVS_IO_FRAME_DATA_BUFFER_SIZE);
-    }
-
     return (iStatus);
 }
-    
+
+/* Euclid's algorithm. GreatestCommonDivisor(0, b) == b, so it can be used as the
+   running accumulator's seed value when folding over a list of rates. */
+static long long GreatestCommonDivisor(long long a, long long b)
+{
+    while (b != 0)
+    {
+        long long remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    return a;
+}
+
 /*=====================================================================================
 ** Name: TVS_IO_InitApp
 **
@@ -804,21 +848,41 @@ int32 TVS_IO_InitApp()
     /* Initialize socket connection data for trick variable servers */
     InitConnectionInfo();
 
-    /* Create a child task which will connect to trick variable server and continuously read from trick sockets */
-    iStatus = CFE_ES_CreateChildTask(&g_TVS_IO_AppData.receiveTaskId,
-                                        "TVS_IO_RcvTask",
-                                        (CFE_ES_ChildTaskMainFuncPtr_t)&ReceiveTaskRun,
-                                        NULL,
-                                        TVS_IO_RCV_THREAD_STACK_SIZE,
-                                        0, 0);
 
-    if (iStatus != CFE_SUCCESS)
+    // Initialize rates if any, and find the smallest common rate (the GCD of all
+    // mapping periods, in tics) needed to satisfy every trickToCfsRate entry.
+    for(size_t ii = 0; ii < TVS_NUM_SIM_CONN; ++ii)
     {
-        CFE_ES_WriteToSysLog("TVS_IO - Failed to create child task for processing incoming TVS data...\n");
+        TVS_IO_TrickServer_t * currServer = &g_TVS_IO_AppData.servers[ii];
+        currServer->trickToCfsRateInTics = 0;
+        for(size_t jj = 0; jj < TVS_IO_MAPPING_COUNT; ++jj)
+        {
+            TVS_IO_Mapping * currMap = &g_TVS_IO_AppData.mappings[jj];
+            if(currMap->connectionIndex == ii && currMap->flowDirection != CfsToTrick && currMap->trickToCfsRate > 1.0e-6)
+            {
+                currMap->trickToCfsRateInTics = (long long)round(currMap->trickToCfsRate * timeTicValue);
+                currMap->nextSendTic = currMap->trickToCfsRateInTics;
+                currServer->trickToCfsRateInTics = GreatestCommonDivisor(currServer->trickToCfsRateInTics, currMap->trickToCfsRateInTics);
+            }
+        }
+        if(currServer->trickToCfsRateInTics == 0)
+        {
+            currServer->trickToCfsRateInTics = 100000;
+        }
     }
 
-    /* Install the cleanup callback */
-    OS_TaskInstallDeleteHandler(&TVS_IO_CleanupCallback);
+    for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+    {
+        int32 prevConnectionStatus = g_TVS_IO_AppData.servers[conn].socket;
+        int32 iConnStatus = ConnectToTrickVariableServerByConn(conn);
+        if (iConnStatus == TVSIO_CONN_SUCCESS)
+        {
+            if (g_TVS_IO_AppData.servers[conn].socket != prevConnectionStatus && g_TVS_IO_AppData.servers[conn].socket >= 0)
+            {
+                SendInitMessagesByConn(conn);
+            }
+        }
+    }
 
 TVS_IO_InitApp_Exit_Tag:
     if (iStatus == CFE_SUCCESS)
@@ -831,50 +895,8 @@ TVS_IO_InitApp_Exit_Tag:
         CFE_ES_WriteToSysLog("TVS_IO - Application failed to initialize\n");
     }
 
+
     return (iStatus);
-}
-    
-/*=====================================================================================
-** Name: TVS_IO_CleanupCallback
-**
-** Purpose: To handle any neccesary cleanup prior to application exit
-**
-** Arguments:
-**    None
-**
-** Returns:
-**    None
-**
-** Routines Called:
-**    TBD
-**
-** Called By:
-**    TBD
-**
-** Global Inputs/Reads:
-**    TBD
-**
-** Global Outputs/Writes:
-**    TBD
-**
-** Limitations, Assumptions, External Events, and Notes:
-**    1. List assumptions that are made that apply to this function.
-**    2. List the external source(s) and event(s) that can cause this function to execute.
-**    3. List known limitations that apply to this function.
-**    4. If there are no assumptions, external events, or notes then enter NONE.
-**       Do not omit the section.
-**
-** Algorithm:
-**    Psuedo-code or description of basic algorithm
-**
-** Author(s):  Nexsys 
-**
-** History:  Date Written  2018-03-08
-**           Unit Tested   yyyy-mm-dd
-**=====================================================================================*/
-void TVS_IO_CleanupCallback()
-{
-    //TODO Add code to cleanup memory and other cleanup here -JWP
 }
     
 /*=====================================================================================
@@ -1451,7 +1473,36 @@ void TVS_IO_AppMain()
     /* Application main loop */
     while (CFE_ES_RunLoop(&g_TVS_IO_AppData.uiRunStatus))
     {
-        OS_TaskDelay(100);
+        long long nextTimeInTics = INT64_MAX;
+        for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+        {
+            if(g_TVS_IO_AppData.servers[conn].socket >= 0)
+            {
+                if(g_TVS_IO_AppData.servers[conn].nextTimeToRunInTics < nextTimeInTics)
+                {
+                    nextTimeInTics = g_TVS_IO_AppData.servers[conn].nextTimeToRunInTics;
+                }
+            } 
+        }
+        g_TVS_IO_AppData.currVirtualTimeInTics = nextTimeInTics;
+        for (int conn = 0; conn < TVS_NUM_SIM_CONN; ++conn)
+        {
+            int32 prevConnectionStatus = g_TVS_IO_AppData.servers[conn].socket;
+            int32 iConnStatus = ConnectToTrickVariableServerByConn(conn);
+            if (iConnStatus == TVSIO_CONN_SUCCESS)
+            {
+                if (g_TVS_IO_AppData.servers[conn].socket != prevConnectionStatus && g_TVS_IO_AppData.servers[conn].socket >= 0)
+                {
+                    SendInitMessagesByConn(conn);
+                } else {                    
+                    if(g_TVS_IO_AppData.currVirtualTimeInTics >= g_TVS_IO_AppData.servers[conn].nextTimeToRunInTics)
+                    {
+                        TryReadMessageByConn(conn);
+                        g_TVS_IO_AppData.servers[conn].nextTimeToRunInTics = g_TVS_IO_AppData.currVirtualTimeInTics+g_TVS_IO_AppData.servers[conn].trickToCfsRateInTics;
+                    }
+                }
+            }
+        }
 
         /* This will handle sending data to trick */
         while(1)

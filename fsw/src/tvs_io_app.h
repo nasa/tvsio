@@ -56,6 +56,13 @@
 #define TVSIO_CONN_SUCCESS (1)
 #define TVSIO_CONN_FAILURE (-1)
 
+typedef struct
+{
+   long long rt_frame_tics;
+   int time_tic_value;
+
+} TVS_IO_SimTime_t;
+
 /*
 ** Local Structure Declarations
 */
@@ -101,9 +108,8 @@ typedef struct
 
     /* TODO:  Add declarations for additional private data here */
 
-    //NOTE this can also be declared a static array at compile time since user should have set TVS_NUM_SIM_CONN, similarly to frameDataBuffers below
-    //TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN]; // TODO Decide which is the best approach -JWP
-    TVS_IO_TrickServer_t * servers;
+    TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN];
+    long long currVirtualTimeInTics;
 
     CFE_ES_TaskId_t receiveTaskId;
 
@@ -135,11 +141,13 @@ typedef struct
 
 int32 InitConnectionInfo(void);
 int32 ConnectToTrickVariableServer(void);
+int32 ConnectToTrickVariableServerByConn(int32 connIdx);
 void CheckVariableExistence(int sockfd, const char *commandString);
 int32 SendInitMessages(void);
+void SendInitMessagesByConn(int32 connIdx);
 int32 TryReadMessage(void);
+int32 TryReadMessageByConn(int32 connIdx);
 int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
-void  ReceiveTaskRun(void);
 
 int32 TVS_IO_InitApp(void);
 int32 TVS_IO_InitEvent(void);
@@ -147,8 +155,6 @@ int32 TVS_IO_InitData(void);
 int32 TVS_IO_InitPipe(void);
 
 void  TVS_IO_AppMain(void);
-
-void  TVS_IO_CleanupCallback(void);
 
 int32 TVS_IO_RcvMsg(int32 iBlocking);
 

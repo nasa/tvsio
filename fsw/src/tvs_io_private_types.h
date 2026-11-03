@@ -31,6 +31,7 @@
 #include <netinet/in.h>
 
 #include "cfe.h"
+#include "tvs_io_platform_cfg.h"
 
 /*
 ** Local Defines
@@ -58,6 +59,10 @@ typedef struct
     uint8 flowDirection;
     uint32 msgId;
     int32 unpackedSize;
+
+    double trickToCfsRate;
+    long long trickToCfsRateInTics;
+    long long nextSendTic;
 
     // TODO: make sure these are initialized on the heap in your generated code
     char *unpackedDataBuffer; // include header (filled out on init) for performance reasons in this buffer...
@@ -93,11 +98,14 @@ typedef struct
 {
     int32 socket;
     struct sockaddr_in serv_addr;
+    long long trickToCfsRateInTics;
+    long long nextTimeToRunInTics;
+    int64 nextConnPrintTimeInSecs;
 } TVS_IO_TrickServer_t;
 
 typedef struct
 {
-    char *frameBuffer;
+    char frameBuffer[TVS_IO_FRAME_DATA_BUFFER_SIZE];
     uint32 frameBufferLength;
 } TVS_IO_FrameDataBuffer_t;
 

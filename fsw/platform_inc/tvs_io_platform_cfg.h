@@ -50,13 +50,19 @@
 
 #define TVS_GO_FAST_CMD "trick.var_cycle(0.005)\n"
 
-#define TVS_GO_SLOW_CMD "trick.var_cycle(0.1)\n"
+#define TVS_DEFAULT_RATE 0.1
+
+#define TVS_CONNECTION_RETRY_RATE 5
+
+#define TVS_CONNECTION_ATTEMPT_RATE 60
 
 #define TVS_SET_BINARY_NO_NAMES "trick.var_binary_nonames()\n"
 
 #define TVS_SET_COPY_MODE_CMD "trick.var_set_copy_mode(0)\n"
 
 #define TVS_SET_WRITE_MODE_CMD "trick.var_set_write_mode(0)\n"
+
+#define TVS_RT_FRAME_SEND_ONCE_CMD "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n"
 
 #define TVS_IO_FRAME_DATA_BUFFER_SIZE 81920 // 80 kB default - can be tuned up or down based on data rate per frame
 

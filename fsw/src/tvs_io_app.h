@@ -50,7 +50,6 @@
 /*
 ** Local Defines
 */
-#define TVSIO_MAX_CONN_ATTEMPT (3)
 
 /* Return codes */
 #define TVSIO_CONN_SUCCESS (1)
@@ -140,12 +139,9 @@ typedef struct
 */
 
 int32 InitConnectionInfo(void);
-int32 ConnectToTrickVariableServer(void);
 int32 ConnectToTrickVariableServerByConn(int32 connIdx);
-void CheckVariableExistence(int sockfd, const char *commandString);
-int32 SendInitMessages(void);
+void CheckVariableExistence(int32 connIdx, const char *commandString);
 void SendInitMessagesByConn(int32 connIdx);
-int32 TryReadMessage(void);
 int32 TryReadMessageByConn(int32 connIdx);
 int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
 

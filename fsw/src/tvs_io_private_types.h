@@ -101,6 +101,8 @@ typedef struct
     long long trickToCfsRateInTics;
     long long nextTimeToRunInTics;
     int64 nextConnPrintTimeInSecs;
+    int64 nextConnRetryInSecs;
+    char buffer[8192];
 } TVS_IO_TrickServer_t;
 
 typedef struct

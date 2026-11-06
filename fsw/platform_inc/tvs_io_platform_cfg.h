@@ -52,6 +52,10 @@
 
 #define TVS_DEFAULT_RATE 0.1
 
+#define TVS_CONNECTION_RETRY_RATE 5
+
+#define TVS_CONNECTION_ATTEMPT_RATE 60
+
 #define TVS_SET_BINARY_NO_NAMES "trick.var_binary_nonames()\n"
 
 #define TVS_SET_COPY_MODE_CMD "trick.var_set_copy_mode(0)\n"

@@ -119,8 +119,8 @@ static void HandleServerDisconnect(int32 connIdx, uint16 eventId, const char *ca
     }
     close(g_TVS_IO_AppData.servers[connIdx].socket);
     g_TVS_IO_AppData.servers[connIdx].socket = -1;
-    g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + 60;
-    g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + 5;
+    g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + TVS_CONNECTION_ATTEMPT_RATE;
+    g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + TVS_CONNECTION_RETRY_RATE;
 }
 
 /* Reads and discards numBytes from a TVS connection's socket, in chunks, used to skip
@@ -368,7 +368,7 @@ int32 ConnectToTrickVariableServerByConn(int32 connIdx)
         if(currTimeInSec < g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs) {
             return TVSIO_CONN_FAILURE;
         }
-        g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs = currTimeInSec + 5;
+        g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs = currTimeInSec + TVS_CONNECTION_RETRY_RATE;
 
         inet_ntop(AF_INET, &g_TVS_IO_AppData.servers[connIdx].serv_addr.sin_addr, addr_buff, sizeof(addr_buff));
         port = ntohs(g_TVS_IO_AppData.servers[connIdx].serv_addr.sin_port);
@@ -394,7 +394,7 @@ int32 ConnectToTrickVariableServerByConn(int32 connIdx)
             if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs) {
                 CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_INFORMATION, 
                     "Connect to TVS %d - %s:%d Failed with error: %s", connIdx, addr_buff, port, strerror(errno));
-                g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + 60;
+                g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + TVS_CONNECTION_ATTEMPT_RATE;
             }
             close(g_TVS_IO_AppData.servers[connIdx].socket);
             g_TVS_IO_AppData.servers[connIdx].socket = -1;
@@ -406,7 +406,7 @@ int32 ConnectToTrickVariableServerByConn(int32 connIdx)
         }
         if(currTimeInSec >= g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs)
         {
-            g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + 60;
+            g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = currTimeInSec + TVS_CONNECTION_ATTEMPT_RATE;
         }
     }
     

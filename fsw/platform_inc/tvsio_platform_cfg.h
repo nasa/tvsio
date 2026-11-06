@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_platform_cfg.h
+** File Name:  tvsio_platform_cfg.h
 **
-** Title:  Platform Configuration Header File for TVS_IO Application
+** Title:  Platform Configuration Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  This header file contains declartions and definitions of all TVS_IO's 
+** Purpose:  This header file contains declartions and definitions of all TVSIO's 
 **           platform-specific configurations.
 **
 ** Modification History:
@@ -17,20 +17,20 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_PLATFORM_CFG_H_
-#define _TVS_IO_PLATFORM_CFG_H_
+#ifndef _TVSIO_PLATFORM_CFG_H_
+#define _TVSIO_PLATFORM_CFG_H_
 
 /*
-** tvs_io Platform Configuration Parameter Definitions
+** tvsio Platform Configuration Parameter Definitions
 */
-#define TVS_IO_SCH_PIPE_DEPTH  2
-#define TVS_IO_CMD_PIPE_DEPTH  10
-#define TVS_IO_TLM_PIPE_DEPTH  10
-#define TVS_IO_TRICK_PIPE_DEPTH OS_QUEUE_MAX_DEPTH
+#define TVSIO_SCH_PIPE_DEPTH  2
+#define TVSIO_CMD_PIPE_DEPTH  10
+#define TVSIO_TLM_PIPE_DEPTH  10
+#define TVSIO_TRICK_PIPE_DEPTH OS_QUEUE_MAX_DEPTH
 
-#define TVS_IO_RCV_THREAD_STACK_SIZE 16384
+#define TVSIO_RCV_THREAD_STACK_SIZE 16384
 
-#define TVS_IO_TIMEOUT_MSEC    1000
+#define TVSIO_TIMEOUT_MSEC    1000
 
 #ifndef TVS_NUM_SIM_CONN
     #define TVS_NUM_SIM_CONN 2
@@ -64,7 +64,7 @@
 
 #define TVS_RT_FRAME_SEND_ONCE_CMD "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n"
 
-#define TVS_IO_FRAME_DATA_BUFFER_SIZE 81920 // 80 kB default - can be tuned up or down based on data rate per frame
+#define TVSIO_FRAME_DATA_BUFFER_SIZE 81920 // 80 kB default - can be tuned up or down based on data rate per frame
 
 /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 /* Caution: The byte swap implementation below is expermental!       */
@@ -73,9 +73,9 @@
 #define TVS_SET_BYTE_SWAP_CMD "trick.var_byteswap(1)\n"
 /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 
-#endif /* _TVS_IO_PLATFORM_CFG_H_ */
+#endif /* _TVSIO_PLATFORM_CFG_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_platform_cfg.h
+** End of file tvsio_platform_cfg.h
 **=====================================================================================*/
     

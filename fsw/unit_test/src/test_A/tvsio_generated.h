@@ -1,17 +1,17 @@
-#ifndef __TVS_IO_GENERATED_H__
-#define __TVS_IO_GENERATED_H__
+#ifndef __TVSIO_GENERATED_H__
+#define __TVSIO_GENERATED_H__
 
 #include "cfe_sb.h"
 
-#include "tvs_io_private_types.h"
+#include "tvsio_private_types.h"
 
 #include "CannonStructDef.h"
 #include "CannonStructDef.h"
 
-#define TVS_IO_MAPPING_COUNT 2
-#define TVS_IO_MAX_COMMAND_STRLEN 1024
+#define TVSIO_MAPPING_COUNT 2
+#define TVSIO_MAX_COMMAND_STRLEN 1024
 
-void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings);
+void TVSIO_InitGeneratedCode(TVSIO_Mapping *mappings);
 
 #define TVS_STRUCT_CANNON_MEMBER_COUNT 9
 
@@ -22,4 +22,4 @@ void TVS_Unpack_0x01BA(void *mystruct, void *buffer);
 
 void TVS_Pack_0x19BA(void **buffer, void *mystruct);
 
-#endif // __TVS_IO_GENERATED_H__
+#endif // __TVSIO_GENERATED_H__

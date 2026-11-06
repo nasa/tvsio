@@ -63,6 +63,15 @@
         return; \
     }
 
+/* Trick variable server message indicator values (see Trick docs - Variable-Server#ascii-format) */
+#define VS_IP_ERROR      (-1) /* Protocol Error */
+#define VS_VAR_LIST        0  /* A list of variable values */
+#define VS_VAR_EXISTS      1  /* response to var_exists() */
+#define VS_SIE_RESOURCE    2  /* response to send_sie_resource */
+#define VS_LIST_SIZE       3  /* response to var_send_list_size/send_event_data */
+#define VS_STDIO           4  /* values redirected from stdio */
+#define VS_SEND_ONCE       5  /* response to var_send_once() */
+
 /*
 ** Local Structure Declarations
 */
@@ -104,11 +113,116 @@ static long long GreatestCommonDivisor(long long a, long long b)
    message and attempt a reconnect. */
 static void HandleServerDisconnect(int32 connIdx, uint16 eventId, const char *callerFuncName)
 {
-    CFE_EVS_SendEvent(eventId, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", callerFuncName, connIdx);
+    if(eventId != (uint16)(-1)) 
+    {
+        CFE_EVS_SendEvent(eventId, CFE_EVS_EventType_ERROR, "%s: Error - TVS connection %d appears to have disconnected", callerFuncName, connIdx);
+    }
     close(g_TVS_IO_AppData.servers[connIdx].socket);
     g_TVS_IO_AppData.servers[connIdx].socket = -1;
     g_TVS_IO_AppData.servers[connIdx].nextConnPrintTimeInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + 60;
     g_TVS_IO_AppData.servers[connIdx].nextConnRetryInSecs = g_TVS_IO_AppData.currVirtualTimeInTics + 5;
+}
+
+/* Reads and discards numBytes from a TVS connection's socket, in chunks, used to skip
+   over the body of a message type that the caller isn't interested in processing.
+   Returns 0 on success. On a read error/disconnect, handles the disconnect itself and
+   returns -1. */
+static int32 DiscardBytesFromSocket(int32 connIdx, int numBytes)
+{
+    int bytesDiscarded = 0;
+    while (bytesDiscarded < numBytes)
+    {
+        int toRead = numBytes - bytesDiscarded;
+        if (toRead > (int)sizeof(g_TVS_IO_AppData.servers[connIdx].buffer))
+        {
+            toRead = (int)sizeof(g_TVS_IO_AppData.servers[connIdx].buffer);
+        }
+
+        int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, g_TVS_IO_AppData.servers[connIdx].buffer, toRead);
+        if (bytesRead <= 0)
+        {
+            HandleServerDisconnect(connIdx, __LINE__, __func__);
+            return -1;
+        }
+        bytesDiscarded += bytesRead;
+    }
+    return 0;
+}
+
+/* Reads numBytes from a TVS connection's socket into buffer, issuing repeated read()
+   calls as needed until the full amount has been read. Unlike DiscardBytesFromSocket,
+   this does not call HandleServerDisconnect itself on failure - it just returns -1 so
+   the caller can report/handle the disconnect with its own event ID and context.
+   Returns 0 on success, -1 on a read error or disconnect (read() returning <= 0). */
+static int32 ReadExactlyNBytes(int32 connIdx, char * buffer, int32 numBytes)
+{
+    int totalBytesRead = 0;
+    while (totalBytesRead < numBytes)
+    {
+        int toRead = numBytes - totalBytesRead;
+
+        int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, buffer+totalBytesRead, toRead);
+        if (bytesRead <= 0)
+        {
+            return -1;
+        }
+        totalBytesRead += bytesRead;
+    }
+    return 0;
+}
+
+/* Reads and discards the body of a single TVS variable-server message whose 4-byte
+   message_indicator has already been consumed from the socket (passed in as
+   message_indicator), per that type's own wire format. Used by callers that are only
+   interested in one particular message type and need to skip past other message
+   types already queued up on the connection. Returns the number of bytes discarded
+   (>= 0) on success. On a read error/disconnect, handles the disconnect itself and
+   returns -1. */
+static int32 DiscardTvsMessageBody(int32 connIdx, int32_t message_indicator)
+{
+    switch (message_indicator)
+    {
+        case VS_VAR_EXISTS:
+        {
+            /* A single 1-byte existence flag follows the indicator; no size field. */
+            const int size = 1;
+            if (DiscardBytesFromSocket(connIdx, size) < 0)
+            {
+                return -1;
+            }
+            return size;
+        }
+
+        case VS_SEND_ONCE:
+        case VS_VAR_LIST:
+        {
+            /* A 4-byte message_size follows the indicator (size includes itself),
+               followed by (message_size - 4) bytes of payload. */
+            int32_t remainingPktSize = 0;
+            if(ReadExactlyNBytes(connIdx, (char *)&remainingPktSize, sizeof(remainingPktSize))) {
+                HandleServerDisconnect(connIdx, __LINE__, __func__);
+                return -1;
+            }
+
+            int32_t size = remainingPktSize - (int32_t)sizeof(remainingPktSize);
+            if (DiscardBytesFromSocket(connIdx, size) < 0)
+            {
+                return -1;
+            }
+            return size;
+        }
+
+        default:
+        {
+            /* VS_SIE_RESOURCE, VS_LIST_SIZE, VS_STDIO are never asked for in TVS_IO. This means we got an erroneous message. 
+            Assume a bad connection.*/
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_DEBUG,
+                "%s: Discarded unexpected AND unhandled message type %d on connection %d. Diconnecting...", __func__,
+                message_indicator, connIdx);
+            HandleServerDisconnect(connIdx, -1, __func__);
+            return -1;
+        }
+    }
 }
 
 /* Finds the soonest nextTimeToRunInTics among all connected servers. Returns 0
@@ -306,38 +420,40 @@ void CheckVariableExistence(int32 connIdx, const char *commandString) {
     }
 
     // Send the message to the server
-    ssize_t sent = write(g_TVS_IO_AppData.servers[connIdx].socket, commandString, strlen(commandString));
-    if (sent < 0) {
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem sending message '%s'", __func__, commandString);
-        goto CheckVariableExistence_Err;
-    }
+    SEND_ERR_EXIT(connIdx, commandString);
 
-    // Read the 4-byte message indicator
-    uint32_t indicator;
-    ssize_t received = read(g_TVS_IO_AppData.servers[connIdx].socket, &indicator, sizeof(indicator));
-    if (received != sizeof(indicator)) {
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem reading message indicator for variable '%s'", __func__, commandString);
-        goto CheckVariableExistence_Err;
-    }
+    for(;;) {
+        uint32_t indicator;
+        if(ReadExactlyNBytes(connIdx, (char *)&indicator, 4))
+        {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+                "%s: Error - Problem reading message indicator for variable '%s'", __func__, commandString);
+            goto CheckVariableExistence_Err;
+        }
 
-    // Read the 1-byte existence value
-    uint8_t exists;
-    received = read(g_TVS_IO_AppData.servers[connIdx].socket, &exists, sizeof(exists));
-    if (received != sizeof(exists)) {
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem reading existence byte for variable '%s'", __func__, commandString);
-        goto CheckVariableExistence_Err;
-    }
+        if(indicator != VS_VAR_EXISTS)
+        {
+            DiscardTvsMessageBody(connIdx, indicator);
+        }
 
-    // Check existence
-    if (exists == 0) {
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Trick returned DOES NOT EXIST for variable check:", __func__);
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "Error Continued - %s", commandString);
-        goto CheckVariableExistence_Err;
+        // Read the 1-byte existence value
+        uint8_t exists;
+        if(ReadExactlyNBytes(connIdx, (char *)&exists, 1))
+        {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+                "%s: Error - Problem reading existence byte for variable '%s'", __func__, commandString);
+            goto CheckVariableExistence_Err;
+        }
+
+        // Check existence
+        if (exists == 0) {
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+                "%s: Error - Trick returned DOES NOT EXIST for variable check:", __func__);
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
+                "Error Continued - %s", commandString);
+            goto CheckVariableExistence_Err;
+        }
+        break;
     }
 
     return;
@@ -379,64 +495,69 @@ void SendInitMessagesByConn(int32 connIdx)
     TVS_IO_Mapping *mappings = g_TVS_IO_AppData.mappings;
     TVS_IO_SimTime_t sTime = {0};
 
+    SEND_ERR_EXIT(connIdx, TVS_GO_FAST_CMD)
     SEND_ERR_EXIT(connIdx, TVS_PAUSE_CMD)
-    SEND_ERR_EXIT(connIdx, TVS_SET_BINARY_NO_NAMES);
+    SEND_ERR_EXIT(connIdx, TVS_SET_BINARY_NO_NAMES)
     #if(TVS_BYTE_SWAP) // Caution! Experimental, use at your own risk!
         // trick variable server will byte swap data before sending to tvsio, enable in tvs_io_platform_cfg.h
-        SEND_ERR_EXIT(coconnIdxnn, TVS_SET_BYTE_SWAP_CMD);
+        SEND_ERR_EXIT(coconnIdxnn, TVS_SET_BYTE_SWAP_CMD)
     #endif
-    SEND_ERR_EXIT(connIdx, TVS_SET_COPY_MODE_CMD);
-    SEND_ERR_EXIT(connIdx, TVS_SET_WRITE_MODE_CMD);
+    SEND_ERR_EXIT(connIdx, TVS_SET_COPY_MODE_CMD)
+    SEND_ERR_EXIT(connIdx, TVS_SET_WRITE_MODE_CMD)
     // Get realtime frame settings
-    SEND_ERR_EXIT(connIdx, "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n");
+    SEND_ERR_EXIT(connIdx, "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n")
 
-    // Read the 4-byte message indicator
-    int32_t indicator;
-    ssize_t received = read(g_TVS_IO_AppData.servers[connIdx].socket, &indicator, sizeof(indicator));
-    if (received != sizeof(indicator)) {
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Problem reading message indicator var_send_once", __func__);
-        goto SendInitMessagesByConn_Err;
-    }
-    if(indicator == 5)
+    // Read the 4-byte message indicator, discarding any unexpected-but-handled
+    // message types (e.g. a stray VS_VAR_EXISTS reply still working its way through
+    // the socket) until the VS_SEND_ONCE response to the var_send_once request above
+    // arrives.
+    for (;;)
     {
-        int32_t msg_size;
-        received = read(g_TVS_IO_AppData.servers[connIdx].socket, &msg_size, sizeof(msg_size));
-        if(received != sizeof(msg_size))
+        int32_t indicator;
+        if(ReadExactlyNBytes(connIdx, (char *)&indicator, sizeof(indicator)))
         {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-               "%s: Error - Problem reading message size var_send_once", __func__);
+            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                "%s: Error - Problem reading message indicator var_send_once", __func__);
             goto SendInitMessagesByConn_Err;
         }
-        msg_size -= sizeof(msg_size);
 
-        char buffer[8192];
-        ssize_t remainder = msg_size;
-        while(remainder > 0)
+        if (indicator != VS_SEND_ONCE)
         {
-            received = read(g_TVS_IO_AppData.servers[connIdx].socket, &buffer[msg_size-remainder], remainder);
-            if(received < 0) {
-                HandleServerDisconnect(connIdx, __LINE__, __func__);
+            DiscardTvsMessageBody(connIdx, indicator);
+            continue;
+        } else 
+        {
+            int32_t msg_size;
+            if(ReadExactlyNBytes(connIdx, (char *)&msg_size, sizeof(msg_size)))
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                "%s: Error - Problem reading message size var_send_once", __func__);
+                goto SendInitMessagesByConn_Err;
+            }
+
+            msg_size -= sizeof(msg_size);
+
+            char * buffer = g_TVS_IO_AppData.servers[connIdx].buffer;
+            ssize_t remainder = msg_size;
+            if(ReadExactlyNBytes(connIdx, buffer, remainder))
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                    "%s: Error - Problem reading value block from var_send_once", __func__);
+                goto SendInitMessagesByConn_Err;
+            }
+
+            int32_t num_vars = TVS_UnpackSignedInteger( &buffer[0], 4 );
+            if(num_vars != 2)
+            {
+                CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR,
+                "%s: Error - Problem reading num vars for realtime tics requests", __func__);
                 goto SendInitMessagesByConn_Err;
             } else {
-                remainder -= received;
+                TVS_UnpackRealTimeData(&sTime, buffer+4);
             }
+            // Parsing of real time values succeeded.
+            break;
         }
-        
-        int32_t num_vars = TVS_UnpackSignedInteger( &buffer[0], 4 );
-        if(num_vars != 2)
-        {
-            CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-               "%s: Error - Problem reading num vars for realtime tics requests", __func__);
-            goto SendInitMessagesByConn_Err;
-        } else {
-            TVS_UnpackRealTimeData(&sTime, buffer+4);
-        }
-
-    } else{
-        CFE_EVS_SendEvent(__LINE__, CFE_EVS_EventType_ERROR, 
-            "%s: Error - Got unexpected message indicator. Expected 5. Received %u.\n", __func__, indicator);
-        goto SendInitMessagesByConn_Err;
     }
 
     // send out application-specific init messages...
@@ -476,7 +597,7 @@ void SendInitMessagesByConn(int32 connIdx)
     }
     if(g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics == 0)
     {
-        g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics = 100000;
+        g_TVS_IO_AppData.servers[connIdx].trickToCfsRateInTics = (long long)round(TVS_DEFAULT_RATE*timeTicValue);
     }
 
     double simRtCycle = (double) sTime.rt_frame_tics/sTime.time_tic_value;
@@ -514,57 +635,47 @@ int32 TryReadMessageByConn(int32 connIdx)
     g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength = 0;
     while (vars_received < TVS_IO_TOTAL_VARS_CONN[connIdx])
     {
-        int headerLength = 0;
-        //TODO shouldn't we allocate this outside of the loop, and just clear the buffer? -JWP
-        char buffer[8192]; // Max message size trick will send
-
-        // Read the 12 byte header from the socket
-        while (headerLength < 12)
+        int32 message_indicator = -1;
+        // char * buffer = &g_TVS_IO_AppData.servers[connIdx].buffer[0];
+        if(ReadExactlyNBytes(connIdx, (char *)&message_indicator, sizeof(message_indicator)))
         {
-            int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, buffer + headerLength, 12 - headerLength);
-            if (bytesRead <= 0)
-            {
-                HandleServerDisconnect(connIdx, __LINE__, __func__);
-                return -1;
-            }
-            else
-            {
-                headerLength += bytesRead;
-            }
+            HandleServerDisconnect(connIdx, __LINE__, __func__);
+            return -1;
         }
 
-        int message_indicator = -1, message_size = -1, n_vars = -1;
+        if (message_indicator != VS_VAR_LIST)
+        {
+            DiscardTvsMessageBody(connIdx, message_indicator);
+            continue;
+        }
 
-        /* Get useful info from the header */
-        memcpy(&message_indicator, &buffer[0], 4);
-        memcpy(&message_size, &buffer[4], 4); //NOTE message size does NOT include the 4 byte message_indicator
-        memcpy(&n_vars, &buffer[8], 4);
-
-        vars_received += n_vars;
+        // Read the remaining 8 bytes of the header: message_size and n_vars
+        int32 message_size = -1, n_vars = -1;
+        if(ReadExactlyNBytes(connIdx, (char *)&message_size, sizeof(message_size)))
+        {
+            HandleServerDisconnect(connIdx, __LINE__, __func__);
+            return -1;
+        }
+        if(ReadExactlyNBytes(connIdx, (char *)&n_vars, sizeof(n_vars)))
+        {
+            HandleServerDisconnect(connIdx, __LINE__, __func__);
+            return -1;
+        }
 
         message_size -= 8; // chop off the header bytes from msg size
 
         int payloadBytesRead = 0;
 
-        // read payload into buffer
-        while (payloadBytesRead < message_size)
-        {
-            int bytesRead = read(g_TVS_IO_AppData.servers[connIdx].socket, buffer + payloadBytesRead, message_size - payloadBytesRead);
+        char * buffer = g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer;
 
-            if (bytesRead <= 0)
-            {
-                HandleServerDisconnect(connIdx, __LINE__, __func__);
-                return -1;
-            }
-            else
-            {
-                payloadBytesRead += bytesRead;
-            }
+        // read payload into buffer
+        if(ReadExactlyNBytes(connIdx,  buffer + g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength, message_size))
+        {
+            HandleServerDisconnect(connIdx, __LINE__, __func__);
+            return -1;
         }
 
-        // copy data from read buffer into frame data buffer
-        memcpy(g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBuffer + g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength,
-                buffer, payloadBytesRead);
+        vars_received += n_vars;
 
         g_TVS_IO_AppData.frameDataBuffers[connIdx].frameBufferLength += payloadBytesRead;
     }
@@ -652,7 +763,11 @@ int32 SendTvsMessage(int conn, const char *commandString)
 **=====================================================================================*/
 int32 TVS_IO_InitEvent(void)
 {
-    // No filtering initialized. Intentionally left blank.
+    /*
+    ** Register with EVS
+    */
+    CFE_EVS_Register(NULL, 0, CFE_EVS_EventFilter_BINARY);
+
     return CFE_SUCCESS;
 }
     

@@ -58,6 +58,8 @@
 
 #define TVS_SET_WRITE_MODE_CMD "trick.var_set_write_mode(0)\n"
 
+#define TVS_RT_FRAME_SEND_ONCE_CMD "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n"
+
 #define TVS_IO_FRAME_DATA_BUFFER_SIZE 81920 // 80 kB default - can be tuned up or down based on data rate per frame
 
 /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */

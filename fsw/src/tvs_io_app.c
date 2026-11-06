@@ -505,7 +505,7 @@ void SendInitMessagesByConn(int32 connIdx)
     SEND_ERR_EXIT(connIdx, TVS_SET_COPY_MODE_CMD)
     SEND_ERR_EXIT(connIdx, TVS_SET_WRITE_MODE_CMD)
     // Get realtime frame settings
-    SEND_ERR_EXIT(connIdx, "trick.var_send_once(\"trick_sys.sched.time_tic_value,trick_sys.sched.software_frame_tics\", 2)\n")
+    SEND_ERR_EXIT(connIdx, TVS_RT_FRAME_SEND_ONCE_CMD)
 
     // Read the 4-byte message indicator, discarding any unexpected-but-handled
     // message types (e.g. a stray VS_VAR_EXISTS reply still working its way through

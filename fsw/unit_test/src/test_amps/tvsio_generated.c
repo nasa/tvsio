@@ -1,7 +1,7 @@
 #include <string.h>
 
-#include "tvs_io_generated.h"
-#include "tvs_io_utils.h"
+#include "tvsio_generated.h"
+#include "tvsio_utils.h"
 
 char *TVS_PDU1_Init_Msgs[TVS_PDU1_MEMBER_COUNT] = 
 {
@@ -68,7 +68,7 @@ char *TVS_PDU1_Init_Msgs[TVS_PDU1_MEMBER_COUNT] =
 	"trick.var_add(\"hab_amps_cfs.pdu1.tlm.output_current[7]\") \n",
 };
 
-void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings)
+void TVSIO_InitGeneratedCode(TVSIO_Mapping *mappings)
 {
 	mappings[0].memberCount = TVS_PDU1_MEMBER_COUNT;
 	mappings[0].msgId = 0x7E6A;

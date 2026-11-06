@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_app.h
+** File Name:  tvsio_app.h
 **
-** Title:  Header File for TVS_IO Application
+** Title:  Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  To define TVS_IO's internal macros, data types, global variables and
+** Purpose:  To define TVSIO's internal macros, data types, global variables and
 **           function prototypes
 **
 ** Modification History:
@@ -17,8 +17,8 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_APP_H_
-#define _TVS_IO_APP_H_
+#ifndef _TVSIO_APP_H_
+#define _TVSIO_APP_H_
 
 /*
 ** Pragmas
@@ -38,14 +38,14 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include "tvs_io_platform_cfg.h"
-#include "tvs_io_private_ids.h"
-#include "tvs_io_private_types.h"
-#include "tvs_io_perfids.h"
-#include "tvs_io_msgids.h"
-#include "tvs_io_msg.h"
+#include "tvsio_platform_cfg.h"
+#include "tvsio_private_ids.h"
+#include "tvsio_private_types.h"
+#include "tvsio_perfids.h"
+#include "tvsio_msgids.h"
+#include "tvsio_msg.h"
 
-#include "tvs_io_generated.h"
+#include "tvsio_generated.h"
 
 /*
 ** Local Defines
@@ -60,7 +60,7 @@ typedef struct
    long long rt_frame_tics;
    int time_tic_value;
 
-} TVS_IO_SimTime_t;
+} TVSIO_SimTime_t;
 
 /*
 ** Local Structure Declarations
@@ -68,7 +68,7 @@ typedef struct
 typedef struct
 {
     /* CFE Event table */
-    CFE_EVS_BinFilter_t  EventTbl[TVS_IO_EVT_CNT];
+    CFE_EVS_BinFilter_t  EventTbl[TVSIO_EVT_CNT];
 
     /* CFE scheduling pipe */
     CFE_SB_PipeId_t  SchPipeId; 
@@ -94,30 +94,30 @@ typedef struct
     uint32  uiRunStatus;
     
     /* Input data - from I/O devices or subscribed from other apps' output data.
-       Data structure should be defined in tvs_io/fsw/src/tvs_io_private_types.h */
-    TVS_IO_InData_t   InData;
+       Data structure should be defined in tvsio/fsw/src/tvsio_private_types.h */
+    TVSIO_InData_t   InData;
 
     /* Output data - to be published at the end of a Wakeup cycle.
-       Data structure should be defined in tvs_io/fsw/src/tvs_io_private_types.h */
-    TVS_IO_OutData_t  OutData;
+       Data structure should be defined in tvsio/fsw/src/tvsio_private_types.h */
+    TVSIO_OutData_t  OutData;
 
     /* Housekeeping telemetry - for downlink only.
-       Data structure should be defined in tvs_io/fsw/src/tvs_io_msg.h */
-    TVS_IO_HkTlm_t  HkTlm;
+       Data structure should be defined in tvsio/fsw/src/tvsio_msg.h */
+    TVSIO_HkTlm_t  HkTlm;
 
     /* TODO:  Add declarations for additional private data here */
 
-    TVS_IO_TrickServer_t servers[TVS_NUM_SIM_CONN];
+    TVSIO_TrickServer_t servers[TVS_NUM_SIM_CONN];
     long long currVirtualTimeInTics;
 
     CFE_ES_TaskId_t receiveTaskId;
 
-    TVS_IO_Mapping mappings[TVS_IO_MAPPING_COUNT];
+    TVSIO_Mapping mappings[TVSIO_MAPPING_COUNT];
 
     // this buffer is designed to hold an entire frame's worth of data for processing
-    TVS_IO_FrameDataBuffer_t frameDataBuffers[TVS_NUM_SIM_CONN];
+    TVSIO_FrameDataBuffer_t frameDataBuffers[TVS_NUM_SIM_CONN];
 
-} TVS_IO_AppData_t;
+} TVSIO_AppData_t;
 
 /*
 ** External Global Variables
@@ -145,27 +145,27 @@ void SendInitMessagesByConn(int32 connIdx);
 int32 TryReadMessageByConn(int32 connIdx);
 int32 SendTvsMessage(int conn, const char *commandString);  //TODO should this be using CFE_SB_Msg_t (as it was before we changed the header to match the definition)
 
-int32 TVS_IO_InitApp(void);
-int32 TVS_IO_InitEvent(void);
-int32 TVS_IO_InitData(void);
-int32 TVS_IO_InitPipe(void);
+int32 TVSIO_InitApp(void);
+int32 TVSIO_InitEvent(void);
+int32 TVSIO_InitData(void);
+int32 TVSIO_InitPipe(void);
 
-void  TVS_IO_AppMain(void);
+void  TVSIO_AppMain(void);
 
-int32 TVS_IO_RcvMsg(int32 iBlocking);
+int32 TVSIO_RcvMsg(int32 iBlocking);
 
-void  TVS_IO_ProcessNewData(void);
-void  TVS_IO_ProcessNewCmds(void);
-void  TVS_IO_ProcessNewAppCmds(CFE_SB_Buffer_t*);
+void  TVSIO_ProcessNewData(void);
+void  TVSIO_ProcessNewCmds(void);
+void  TVSIO_ProcessNewAppCmds(CFE_SB_Buffer_t*);
 
-void  TVS_IO_ReportHousekeeping(void);
-void  TVS_IO_SendOutData(void);
+void  TVSIO_ReportHousekeeping(void);
+void  TVSIO_SendOutData(void);
 
-bool  TVS_IO_VerifyCmdLength(CFE_SB_Buffer_t*, uint16);
+bool  TVSIO_VerifyCmdLength(CFE_SB_Buffer_t*, uint16);
 
-#endif /* _TVS_IO_APP_H_ */
+#endif /* _TVSIO_APP_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_app.h
+** End of file tvsio_app.h
 **=====================================================================================*/
     

@@ -11,4 +11,4 @@ set(TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/tvmc_test_example.c    
 )
 
-add_executable(tvs_io_test_example ${TEST_SOURCES})
+add_executable(tvsio_test_example ${TEST_SOURCES})

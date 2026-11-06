@@ -1,7 +1,7 @@
 #include <string.h>
 
-#include "tvs_io_generated.h"
-#include "tvs_io_utils.h"
+#include "tvsio_generated.h"
+#include "tvsio_utils.h"
 
 char *TVS_Struct_Cannon_Init_Msgs[TVS_STRUCT_CANNON_MEMBER_COUNT] = 
 {
@@ -16,7 +16,7 @@ char *TVS_Struct_Cannon_Init_Msgs[TVS_STRUCT_CANNON_MEMBER_COUNT] =
 	"trick.var_add(\"dyn.cannon.vel[1]\") \n",
 };
 
-void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings)
+void TVSIO_InitGeneratedCode(TVSIO_Mapping *mappings)
 {
 	mappings[0].memberCount = TVS_STRUCT_CANNON_MEMBER_COUNT;
 	mappings[0].msgId = 0x01BA;
@@ -87,8 +87,8 @@ void TVS_Pack_0x19BA(void **buffer, void *mystruct)
 	Struct_Cannon_SetVelCmd *mystructptr = (Struct_Cannon_SetVelCmd*)mystruct;
 	char **data = (char**)buffer;
 
-	snprintf(data[0], TVS_IO_MAX_COMMAND_STRLEN, "trick.var_set('dyn.cannon.vel[0]', %f) \n", mystructptr->vel[0]);
-	snprintf(data[1], TVS_IO_MAX_COMMAND_STRLEN, "trick.var_set('dyn.cannon.vel[1]', %f) \n", mystructptr->vel[1]);
-	snprintf(data[2], TVS_IO_MAX_COMMAND_STRLEN, "trick.var_set('trick_zero_conf.zc.name', '%s') \n", mystructptr->mystring);
+	snprintf(data[0], TVSIO_MAX_COMMAND_STRLEN, "trick.var_set('dyn.cannon.vel[0]', %f) \n", mystructptr->vel[0]);
+	snprintf(data[1], TVSIO_MAX_COMMAND_STRLEN, "trick.var_set('dyn.cannon.vel[1]', %f) \n", mystructptr->vel[1]);
+	snprintf(data[2], TVSIO_MAX_COMMAND_STRLEN, "trick.var_set('trick_zero_conf.zc.name', '%s') \n", mystructptr->mystring);
 }
 

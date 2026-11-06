@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_perfids.h
+** File Name:  tvsio_perfids.h
 **
-** Title:  Performance ID Header File for TVS_IO Application
+** Title:  Performance ID Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  This header file contains declartions and definitions of all TVS_IO's 
+** Purpose:  This header file contains declartions and definitions of all TVSIO's 
 **           Performance IDs.
 **
 ** Modification History:
@@ -17,17 +17,17 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_PERFIDS_H_
-#define _TVS_IO_PERFIDS_H_
+#ifndef _TVSIO_PERFIDS_H_
+#define _TVSIO_PERFIDS_H_
 
-#define TVS_IO_MAIN_TASK_PERF_ID            50
+#define TVSIO_MAIN_TASK_PERF_ID            50
 
     
 
 
-#endif /* _TVS_IO_PERFIDS_H_ */
+#endif /* _TVSIO_PERFIDS_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_perfids.h
+** End of file tvsio_perfids.h
 **=====================================================================================*/
     

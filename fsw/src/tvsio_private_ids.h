@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_private_ids.h
+** File Name:  tvsio_private_ids.h
 **
-** Title:  ID Header File for TVS_IO Application
+** Title:  ID Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  This header file contains declarations and definitions of TVS_IO's private IDs.
+** Purpose:  This header file contains declarations and definitions of TVSIO's private IDs.
 **
 ** Modification History:
 **   Date | Author | Description
@@ -16,8 +16,8 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_PRIVATE_IDS_H_
-#define _TVS_IO_PRIVATE_IDS_H_
+#ifndef _TVSIO_PRIVATE_IDS_H_
+#define _TVSIO_PRIVATE_IDS_H_
 
 /*
 ** Pragmas
@@ -32,24 +32,24 @@
 */
 
 /* Event IDs */
-#define TVS_IO_RESERVED_EID  0
+#define TVSIO_RESERVED_EID  0
 
-#define TVS_IO_INF_EID        1
-#define TVS_IO_INIT_INF_EID   2
-#define TVS_IO_ILOAD_INF_EID  3
-#define TVS_IO_CDS_INF_EID    4
-#define TVS_IO_CMD_INF_EID    5
+#define TVSIO_INF_EID        1
+#define TVSIO_INIT_INF_EID   2
+#define TVSIO_ILOAD_INF_EID  3
+#define TVSIO_CDS_INF_EID    4
+#define TVSIO_CMD_INF_EID    5
 
-#define TVS_IO_ERR_EID         51
-#define TVS_IO_INIT_ERR_EID    52
-#define TVS_IO_ILOAD_ERR_EID   53
-#define TVS_IO_CDS_ERR_EID     54
-#define TVS_IO_CMD_ERR_EID     55
-#define TVS_IO_PIPE_ERR_EID    56
-#define TVS_IO_MSGID_ERR_EID   57
-#define TVS_IO_MSGLEN_ERR_EID  58
+#define TVSIO_ERR_EID         51
+#define TVSIO_INIT_ERR_EID    52
+#define TVSIO_ILOAD_ERR_EID   53
+#define TVSIO_CDS_ERR_EID     54
+#define TVSIO_CMD_ERR_EID     55
+#define TVSIO_PIPE_ERR_EID    56
+#define TVSIO_MSGID_ERR_EID   57
+#define TVSIO_MSGLEN_ERR_EID  58
 
-#define TVS_IO_EVT_CNT  14
+#define TVSIO_EVT_CNT  14
 
 /*
 ** Local Structure Declarations
@@ -71,9 +71,9 @@
 ** Local Function Prototypes
 */
 
-#endif /* _TVS_IO_PRIVATE_IDS_H_ */
+#endif /* _TVSIO_PRIVATE_IDS_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_private_ids.h
+** End of file tvsio_private_ids.h
 **=====================================================================================*/
     

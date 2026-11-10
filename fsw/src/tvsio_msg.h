@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_msg.h
+** File Name:  tvsio_msg.h
 **
-** Title:  Message Definition Header File for TVS_IO Application
+** Title:  Message Definition Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  To define TVS_IO's command and telemetry message defintions 
+** Purpose:  To define TVSIO's command and telemetry message defintions 
 **
 ** Modification History:
 **   Date | Author | Description
@@ -16,8 +16,8 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_MSG_H_
-#define _TVS_IO_MSG_H_
+#ifndef _TVSIO_MSG_H_
+#define _TVSIO_MSG_H_
 
 /*
 ** Pragmas
@@ -34,10 +34,10 @@
 */
 
 /*
-** TVS_IO command codes
+** TVSIO command codes
 */
-#define TVS_IO_NOOP_CC                 0
-#define TVS_IO_RESET_CC                1
+#define TVSIO_NOOP_CC                 0
+#define TVSIO_RESET_CC                1
 
 /*
 ** Local Structure Declarations
@@ -50,11 +50,11 @@ typedef struct
 
     /* TODO:  Add declarations for additional housekeeping data here */
 
-} TVS_IO_HkTlm_t;
+} TVSIO_HkTlm_t;
 
 
-#endif /* _TVS_IO_MSG_H_ */
+#endif /* _TVSIO_MSG_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_msg.h
+** End of file tvsio_msg.h
 **=====================================================================================*/

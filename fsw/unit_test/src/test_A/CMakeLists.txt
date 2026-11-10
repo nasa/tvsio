@@ -8,7 +8,7 @@ include_directories(BEFORE
 
 set(TEST_SOURCES
     ${COMMON_TEST_SRC_FILES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/tvs_io_generated.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/tvsio_generated.c
     ${CMAKE_CURRENT_SOURCE_DIR}/tvmc_test_A.c
 )
 

@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_msgids.h
+** File Name:  tvsio_msgids.h
 **
-** Title:  Message ID Header File for TVS_IO Application
+** Title:  Message ID Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  This header file contains declartions and definitions of all TVS_IO's 
+** Purpose:  This header file contains declartions and definitions of all TVSIO's 
 **           Message IDs.
 **
 ** Modification History:
@@ -17,23 +17,23 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_MSGIDS_H_
-#define _TVS_IO_MSGIDS_H_
+#ifndef _TVSIO_MSGIDS_H_
+#define _TVSIO_MSGIDS_H_
 
 /***** TODO:  These Message ID values are default and may need to be changed by the developer  *****/
-#define TVS_IO_CMD_MID            	0x18A0
-#define TVS_IO_SEND_HK_MID        	0x18A1
-#define TVS_IO_WAKEUP_MID        	0x18A2
-#define TVS_IO_OUT_DATA_MID        	0x18A3
+#define TVSIO_CMD_MID            	0x18A0
+#define TVSIO_SEND_HK_MID        	0x18A1
+#define TVSIO_WAKEUP_MID        	0x18A2
+#define TVSIO_OUT_DATA_MID        	0x18A3
 
-#define TVS_IO_HK_TLM_MID		0x08A0
+#define TVSIO_HK_TLM_MID		0x08A0
 
     
 
 
-#endif /* _TVS_IO_MSGIDS_H_ */
+#endif /* _TVSIO_MSGIDS_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_msgids.h
+** End of file tvsio_msgids.h
 **=====================================================================================*/
     

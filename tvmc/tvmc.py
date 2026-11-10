@@ -21,7 +21,7 @@ import re
 
 class TvsIoCodeGenerator:
 
-    MaxCmdStrlenMacro = "TVS_IO_MAX_COMMAND_STRLEN" 
+    MaxCmdStrlenMacro = "TVSIO_MAX_COMMAND_STRLEN" 
 
     def __init__(self, maxCmdStrlen = 1024):
         self.Mappings = []
@@ -32,8 +32,8 @@ class TvsIoCodeGenerator:
 
     def GenerateHeaderFileData(self):
 
-        magicCode = "#ifndef __TVS_IO_GENERATED_H__\n#define __TVS_IO_GENERATED_H__\n\n"
-        magicCode += "#include \"tvs_io_private_types.h\"\n"
+        magicCode = "#ifndef __TVSIO_GENERATED_H__\n#define __TVSIO_GENERATED_H__\n\n"
+        magicCode += "#include \"tvsio_private_types.h\"\n"
 
         # Add mapping includes, but only once each
         includedDict = {}
@@ -45,11 +45,11 @@ class TvsIoCodeGenerator:
         magicCode += "#include \"cfe_sb.h\"\n\n"
         magicCode += "#include <stdint.h>\n"
 
-        magicCode += "\nstatic const int TVS_IO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
-        magicCode += "#define TVS_IO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
-        magicCode += "#define TVS_IO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
+        magicCode += "\nstatic const int TVSIO_TOTAL_VARS_CONN[] = {" + str(self.GetTotalMemberPerConnCount()) + "};\n"
+        magicCode += "#define TVSIO_MAPPING_COUNT " + str(len(self.Mappings)) + "\n"
+        magicCode += "#define TVSIO_MAX_COMMAND_STRLEN " + str(self.MaxCmdStrlen) + "\n\n"
 
-        magicCode += "void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings);\n\n"
+        magicCode += "void TVSIO_InitGeneratedCode(TVSIO_Mapping *mappings);\n\n"
 
         for mapping in self.Mappings:
             magicCode += mapping.EmitMacroDefs() + "\n"
@@ -62,14 +62,14 @@ class TvsIoCodeGenerator:
             if mapping.FlowDirection & 2:
                 magicCode += mapping.EmitPackDeclaration() + "\n"
 
-        magicCode += "\n#endif // __TVS_IO_GENERATED_H__"
+        magicCode += "\n#endif // __TVSIO_GENERATED_H__"
 
         return magicCode
     
     def GenerateSourceFileData(self):
 
-        magicCode = "#include \"tvs_io_generated.h\"\n"
-        magicCode += "#include \"tvs_io_utils.h\"\n\n"
+        magicCode = "#include \"tvsio_generated.h\"\n"
+        magicCode += "#include \"tvsio_utils.h\"\n\n"
         magicCode += "#include <string.h>\n\n"
 
         for mapping in self.Mappings:
@@ -79,11 +79,11 @@ class TvsIoCodeGenerator:
                 magicCode += mapping.EmitInitMessagesDefinition() + "\n"
 
         # generate the initialization function
-        magicCode += "void TVS_IO_InitGeneratedCode(TVS_IO_Mapping *mappings)\n{\n"
+        magicCode += "void TVSIO_InitGeneratedCode(TVSIO_Mapping *mappings)\n{\n"
 
         if len(self.Mappings) == 0:
 
-            magicCode += "\tOS_printf(\"TVS_IO WARNING: Initialized with no mapping definitions...\\n\");\n"
+            magicCode += "\tOS_printf(\"TVSIO WARNING: Initialized with no mapping definitions...\\n\");\n"
         
         else:
 
@@ -113,6 +113,9 @@ class TvsIoCodeGenerator:
                         magicCode += "\tCFE_MSG_SetFcnCode((CFE_SB_MsgPtr_t)mappings[" + str(x) + "].unpackedDataBuffer, " + str(mapping.CommandCode) + ");\n"
 
                     magicCode += "\tmappings[" + str(x) + "].unpack = " + mapping.UnpackFunctionName + ";\n\n"
+
+                    if mapping.Rate != 0:
+                        magicCode += "\tmappings[" + str(x) + "].trickToCfsRate = " + str(mapping.Rate) + ";\n\n"
 
                 if mapping.FlowDirection & 2:
 
@@ -154,12 +157,13 @@ class TvsIoCodeGenerator:
 
 class TvsIoMapping:
 
-    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None):
+    def __init__(self, msgIdString, structureName, structureFilename, flowDirection, commandCode = None, connectionIndex = None, rate = None):
         self.MsgIdString = msgIdString
         self.MsgId = int(msgIdString, 16)
         self.FlowDirection = flowDirection
         self.CommandCode = 0 if commandCode is None else commandCode
         self.ConnectionIndex = 0 if connectionIndex is None else connectionIndex
+        self.Rate = 0 if rate is None else rate
 
         self.IsTelemetry = commandCode is None
 
@@ -415,8 +419,8 @@ def main():
 
     encounteredError = False
 
-    parser = argparse.ArgumentParser(description='TVM Compiler for TVS_IO App.')
-    parser.add_argument('-o', '--output', help='Output directory for TVS_IO generated code files.')
+    parser = argparse.ArgumentParser(description='TVM Compiler for TVSIO App.')
+    parser.add_argument('-o', '--output', help='Output directory for TVSIO generated code files.')
     parser.add_argument('tvm_files', metavar='FILE', nargs='*', help='List of paths to TVM Files')
 
     args = parser.parse_args()
@@ -430,8 +434,8 @@ def main():
     else:
         outputDirectory = os.path.abspath(".")
 
-    outputSourceFilePath = os.path.join(outputDirectory, "tvs_io_generated.c")
-    outputHeaderFilePath = os.path.join(outputDirectory, "tvs_io_generated.h")
+    outputSourceFilePath = os.path.join(outputDirectory, "tvsio_generated.c")
+    outputHeaderFilePath = os.path.join(outputDirectory, "tvsio_generated.h")
 
     generator = TvsIoCodeGenerator()
 
@@ -506,20 +510,27 @@ def main():
             encounteredError = True
             continue
 
+        rate = None
+        if 'rate' in tvmObject:
+            if flowDirection == 2:
+                printWarning("Specified rates are only for Trick-to-CFS flow directions (i.e. 1 or 3)")
+            else:
+                rate = tvmObject['rate']
+
         commandCode = None
         if "commandCode" in tvmObject:
             commandCode = tvmObject["commandCode"]
 
         connectionIndex = None
         if "connectionIndex" in tvmObject:
-            connectionIndex = tvmObject["connectionIndex"]
+            connectionIndex = tvmObject["connectionIndex"]        
 
         nMembers = len(members)
 
         if not members:
             printWarning("No members found for type {} defined in {}".format(cfsStructureType, tvmFilePath))
 
-        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex)
+        mapping = TvsIoMapping(msgId, cfsStructureType, cfsStructureFileName, flowDirection, commandCode, connectionIndex, rate)
 
         for x in range(0, nMembers):
 

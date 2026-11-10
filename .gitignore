@@ -1,4 +1,4 @@
 .vscode/
 fsw/types_inc/*.h
-fsw/src/tvs_io_generated.c
-fsw/src/tvs_io_generated.h
+fsw/src/tvsio_generated.c
+fsw/src/tvsio_generated.h

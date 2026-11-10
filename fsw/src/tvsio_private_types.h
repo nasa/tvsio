@@ -1,13 +1,13 @@
 /*=======================================================================================
-** File Name:  tvs_io_private_types.h
+** File Name:  tvsio_private_types.h
 **
-** Title:  Type Header File for TVS_IO Application
+** Title:  Type Header File for TVSIO Application
 **
 ** $Author:    Nexsys
 ** $Revision: 1.1 $
 ** $Date:      2018-03-08
 **
-** Purpose:  This header file contains declarations and definitions of all TVS_IO's private
+** Purpose:  This header file contains declarations and definitions of all TVSIO's private
 **           data structures and data types.
 **
 ** Modification History:
@@ -17,8 +17,8 @@
 **
 **=====================================================================================*/
     
-#ifndef _TVS_IO_PRIVATE_TYPES_H_
-#define _TVS_IO_PRIVATE_TYPES_H_
+#ifndef _TVSIO_PRIVATE_TYPES_H_
+#define _TVSIO_PRIVATE_TYPES_H_
 
 /*
 ** Pragmas
@@ -31,6 +31,7 @@
 #include <netinet/in.h>
 
 #include "cfe.h"
+#include "tvsio_platform_cfg.h"
 
 /*
 ** Local Defines
@@ -59,6 +60,10 @@ typedef struct
     uint32 msgId;
     int32 unpackedSize;
 
+    double trickToCfsRate;
+    long long trickToCfsRateInTics;
+    long long nextSendTic;
+
     // TODO: make sure these are initialized on the heap in your generated code
     char *unpackedDataBuffer; // include header (filled out on init) for performance reasons in this buffer...
     char **packedCommandBuffer;
@@ -66,12 +71,12 @@ typedef struct
     TVS_PackStructFunction pack;
     TVS_UnpackStructFunction unpack;
     
-} TVS_IO_Mapping;
+} TVSIO_Mapping;
 
 typedef struct
 {
     CFE_MSG_CommandHeader_t ucCmdHeader;
-} TVS_IO_NoArgCmd_t;
+} TVSIO_NoArgCmd_t;
 
 typedef struct
 {
@@ -81,25 +86,30 @@ typedef struct
     **        devices or data subscribed from other apps' output data.
     */
 
-} TVS_IO_InData_t;
+} TVSIO_InData_t;
 
 typedef struct
 {
     CFE_MSG_TelemetryHeader_t ucTlmHeader;
     uint32  uiCounter;
-} TVS_IO_OutData_t;
+} TVSIO_OutData_t;
 
 typedef struct
 {
     int32 socket;
     struct sockaddr_in serv_addr;
-} TVS_IO_TrickServer_t;
+    long long trickToCfsRateInTics;
+    long long nextTimeToRunInTics;
+    int64 nextConnPrintTimeInSecs;
+    int64 nextConnRetryInSecs;
+    char buffer[8192];
+} TVSIO_TrickServer_t;
 
 typedef struct
 {
-    char *frameBuffer;
+    char frameBuffer[TVSIO_FRAME_DATA_BUFFER_SIZE];
     uint32 frameBufferLength;
-} TVS_IO_FrameDataBuffer_t;
+} TVSIO_FrameDataBuffer_t;
 
 /* TODO:  Add more private structure definitions here, if necessary. */
 
@@ -119,9 +129,9 @@ typedef struct
 ** Local Function Prototypes
 */
 
-#endif /* _TVS_IO_PRIVATE_TYPES_H_ */
+#endif /* _TVSIO_PRIVATE_TYPES_H_ */
 
 /*=======================================================================================
-** End of file tvs_io_private_types.h
+** End of file tvsio_private_types.h
 **=====================================================================================*/
     

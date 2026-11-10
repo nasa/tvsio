@@ -2,7 +2,7 @@
 ######################### Overview ###########################
 ##############################################################
 
-TVS_IO supports mapping between complex (composite) data type instances in CFS to members of an arbitrary number of instances of Trick simulation data types.  This mapping is captured in a "TVM" file (short for "Trick Variable-Mapping" file).
+TVSIO supports mapping between complex (composite) data type instances in CFS to members of an arbitrary number of instances of Trick simulation data types.  This mapping is captured in a "TVM" file (short for "Trick Variable-Mapping" file).
 
 ##############################################################
 ########################### TVMC #############################
@@ -36,7 +36,7 @@ Key: "flowDirection"
 Value: An integer type that can be 1, 2, or 3.  If this is set to 1, this mapping only applies to data flowing from Trick to CFS.  If this is set to 2, this mapping only applies to data flowing from CFS to Trick.  If this is set to 3, then this mapping is "bi-directional" and applies to data flowing in either direction betweeen CFS and Trick.
 
 Key: "connectionIndex" (optional, default=0, only use if there are multiple trick simulations with which to transfer data)
-Value: zero based index to indicate which trick sim connection a structure is tied with. The index should correspond to the trick variable server IP and port (TVS_SERVER_IPS, TVS_SERVER_PORTS) defined in tvs_io_platform_cfg.h 
+Value: zero based index to indicate which trick sim connection a structure is tied with. The index should correspond to the trick variable server IP and port (TVS_SERVER_IPS, TVS_SERVER_PORTS) defined in tvsio_platform_cfg.h 
 
 Key: "commandCode" (optional and only used for mappings with a CCSDS Telecommand Message ID)
 Value: If supplied, the command code will be coupled with a particular message ID to uniquely identify a particular mapping.
@@ -63,7 +63,7 @@ Value: String type containing one of the following values - "int8", "int16", "in
 #### Type Conversions Between CFS & Trick Primitive Types ####
 ##############################################################
 
-TVS_IO supports conversions between primitive data types in CFS and Trick.  Moreover, TVMC has an extensible interface for extending supported type conversions to accomodate user-defined mappings between different types.
+TVSIO supports conversions between primitive data types in CFS and Trick.  Moreover, TVMC has an extensible interface for extending supported type conversions to accomodate user-defined mappings between different types.
 
 Currently supported default primitive type mappings from CFS to Trick include, respectively:
 

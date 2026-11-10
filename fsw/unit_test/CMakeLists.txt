@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6.4)
-project(TVS_IO_TEST C)
+project(TVSIO_TEST C)
 
 set(CMAKE_C_FLAGS "-std=gnu99 ${CMAKE_C_FLAGS}")
 
@@ -30,7 +30,7 @@ file(GLOB COMMON_TEST_SRC_FILES
 
 set(COMMON_TEST_SRC_FILES
     ${COMMON_TEST_SRC_FILES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/tvs_io_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/tvsio_utils.c
 )
 
 # TODO: instead of rebuilding every object file for each target,
